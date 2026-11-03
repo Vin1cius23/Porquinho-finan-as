@@ -98,10 +98,10 @@ export async function syncUserToSupabase(userId) {
     if (userErr) throw new Error(userErr.message);
     const remoteUserId = remoteUser.id;
 
-    // 2. Categorias deste usuário
+    // 2. Categorias deste usuário (só substitui se houver categorias locais para não apagar em instância fria)
     const localCats = db.prepare('SELECT * FROM categories WHERE user_id = ?').all(u.id);
-    await supabaseClient.from('categories').delete().eq('user_id', remoteUserId);
     if (localCats.length > 0) {
+      await supabaseClient.from('categories').delete().eq('user_id', remoteUserId);
       await supabaseClient.from('categories').insert(
         localCats.map((c) => ({
           user_id: remoteUserId,
@@ -112,10 +112,10 @@ export async function syncUserToSupabase(userId) {
       );
     }
 
-    // 3. Contas deste usuário
+    // 3. Contas deste usuário (só substitui se houver contas locais para nunca zerar saldo inicial)
     const localAccs = db.prepare('SELECT * FROM accounts WHERE user_id = ?').all(u.id);
-    await supabaseClient.from('accounts').delete().eq('user_id', remoteUserId);
     if (localAccs.length > 0) {
+      await supabaseClient.from('accounts').delete().eq('user_id', remoteUserId);
       await supabaseClient.from('accounts').insert(
         localAccs.map((a) => ({
           user_id: remoteUserId,
@@ -271,11 +271,14 @@ export async function ensureHydratedFromSupabase(forceRefreshEmail = null) {
         }
       }
 
-      // Hidrata contas se vazio localmente
-      const accCount = db.prepare('SELECT COUNT(*) as c FROM accounts WHERE user_id = ?').get(localUserId).c;
-      if (accCount === 0) {
+      // Hidrata contas se vazio localmente ou se a soma do saldo inicial local estiver zerada enquanto o remoto possui saldo
+      const localAccStats = db
+        .prepare("SELECT COUNT(*) as c, COALESCE(SUM(initial_balance), 0) as sumBal FROM accounts WHERE user_id = ? AND type != 'credit_card'")
+        .get(localUserId);
+      if (localAccStats.c === 0 || forceRefreshEmail) {
         const { data: rAccs } = await supabaseClient.from('accounts').select('*').eq('user_id', ru.id);
         if (rAccs && rAccs.length > 0) {
+          db.prepare('DELETE FROM accounts WHERE user_id = ?').run(localUserId);
           const insAcc = db.prepare(
             'INSERT INTO accounts (user_id, name, type, initial_balance, credit_limit, closing_day, due_day) VALUES (?, ?, ?, ?, ?, ?, ?)'
           );
