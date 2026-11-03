@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   MessageSquare,
   Wallet,
@@ -39,6 +39,12 @@ export default function AuthModal({ user, token, onAuthSuccess, onOnboardingComp
   const [selectedCategories, setSelectedCategories] = useState(STANDARD_CATEGORIES);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (user && user.onboarded === 0 && step === 1) {
+      setStep(2);
+    }
+  }, [user, step]);
 
   async function handleStep1Submit(e) {
     e.preventDefault();

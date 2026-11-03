@@ -18,6 +18,7 @@ import {
   exportTransactionsToFile,
   formatCurrency,
   formatDateBR,
+  getTodayISO,
   parseImportedSpreadsheet,
 } from '../utils/formatters.js';
 
@@ -133,7 +134,7 @@ export default function SpreadsheetView({
     const val = parseFloat(String(quickAmount).replace(',', '.'));
     if (!quickDesc.trim() || !val || val <= 0) return;
     await onCreateTransaction({
-      date: new Date().toISOString().slice(0, 10),
+      date: getTodayISO(),
       description: quickDesc.trim(),
       category: quickCat || categories[0]?.name || 'Outros',
       type: quickType,
@@ -151,7 +152,7 @@ export default function SpreadsheetView({
 
   async function handleDuplicateRow(tx) {
     await onCreateTransaction({
-      date: new Date().toISOString().slice(0, 10),
+      date: getTodayISO(),
       description: tx.description,
       category: tx.category,
       type: tx.type,

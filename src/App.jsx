@@ -25,7 +25,7 @@ import ChatPanel from './components/ChatPanel.jsx';
 import SpreadsheetView from './components/SpreadsheetView.jsx';
 import MonthlySummary from './components/MonthlySummary.jsx';
 import AccountsManager from './components/AccountsManager.jsx';
-import { formatCurrency } from './utils/formatters.js';
+import { formatCurrency, getCurrentMonthISO, getTodayISO } from './utils/formatters.js';
 
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem('finchat_token') || '');
@@ -38,7 +38,7 @@ export default function App() {
   const [mobileTab, setMobileTab] = useState('chat');
   const [hideBalance, setHideBalance] = useState(false);
 
-  const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [selectedMonth, setSelectedMonth] = useState(() => getCurrentMonthISO());
   const [messages, setMessages] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
