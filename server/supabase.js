@@ -218,3 +218,91 @@ export function triggerBackgroundSupabaseSync() {
   });
 }
 
+let isHydrated = false;
+
+/**
+ * Em ambientes Serverless (como Vercel), carrega os dados salvos no Supabase
+ * para o banco em memória/tmp no cold start da função.
+ */
+export async function ensureHydratedFromSupabase() {
+  if (isHydrated) return;
+  isHydrated = true;
+  if (!supabaseClient) initSupabaseClient();
+  if (!supabaseClient) return;
+
+  try {
+    const { data: remoteUsers } = await supabaseClient.from('users').select('*');
+    if (!remoteUsers || remoteUsers.length === 0) return;
+
+    for (const ru of remoteUsers) {
+      let localUser = db.prepare('SELECT * FROM users WHERE email = ?').get(ru.email);
+      let localUserId;
+      if (!localUser) {
+        const res = db
+          .prepare('INSERT INTO users (name, email, password_hash, onboarded) VALUES (?, ?, ?, ?)')
+          .run(ru.name, ru.email, ru.password_hash, ru.onboarded ? 1 : 0);
+        localUserId = Number(res.lastInsertRowid);
+      } else {
+        localUserId = localUser.id;
+      }
+
+      // Categorias
+      const { data: rCats } = await supabaseClient.from('categories').select('*').eq('user_id', ru.id);
+      if (rCats && rCats.length > 0) {
+        const insCat = db.prepare(
+          'INSERT OR IGNORE INTO categories (user_id, name, monthly_budget, color) VALUES (?, ?, ?, ?)'
+        );
+        for (const c of rCats) {
+          insCat.run(localUserId, c.name, Number(c.monthly_budget || 0), c.color || '#10b981');
+        }
+      }
+
+      // Contas
+      const accCount = db.prepare('SELECT COUNT(*) as c FROM accounts WHERE user_id = ?').get(localUserId).c;
+      if (accCount === 0) {
+        const { data: rAccs } = await supabaseClient.from('accounts').select('*').eq('user_id', ru.id);
+        if (rAccs && rAccs.length > 0) {
+          const insAcc = db.prepare(
+            'INSERT INTO accounts (user_id, name, type, initial_balance, credit_limit, closing_day, due_day) VALUES (?, ?, ?, ?, ?, ?, ?)'
+          );
+          for (const a of rAccs) {
+            insAcc.run(localUserId, a.name, a.type, Number(a.initial_balance || 0), Number(a.credit_limit || 0), a.closing_day, a.due_day);
+          }
+        }
+      }
+
+      // Lançamentos
+      const txCount = db.prepare('SELECT COUNT(*) as c FROM transactions WHERE user_id = ?').get(localUserId).c;
+      if (txCount === 0) {
+        const { data: rTxs } = await supabaseClient.from('transactions').select('*').eq('user_id', ru.id);
+        if (rTxs && rTxs.length > 0) {
+          const insTx = db.prepare(`
+            INSERT INTO transactions (
+              user_id, date, description, category, type, amount, payment_method, account_name, is_recurring, installment_info, notes, status, due_date
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `);
+          for (const t of rTxs) {
+            insTx.run(
+              localUserId,
+              t.date,
+              t.description,
+              t.category,
+              t.type,
+              Number(t.amount),
+              t.payment_method,
+              t.account_name,
+              t.is_recurring ? 1 : 0,
+              t.installment_info || '',
+              t.notes || '',
+              t.status || 'paid',
+              t.due_date || null
+            );
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Supabase Hydrate] Aviso ao hidratar dados iniciais:', err.message);
+  }
+}
+
