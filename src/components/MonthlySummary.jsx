@@ -64,6 +64,7 @@ export default function MonthlySummary({
   const [hoveredSlice, setHoveredSlice] = useState(null);
 
   const {
+    initialBalance = 0,
     totalIncome = 0,
     totalExpense = 0,
     balanceMonth = 0,
@@ -72,6 +73,8 @@ export default function MonthlySummary({
     remainingBudget = 0,
     byCategory = [],
   } = summary || {};
+
+  const totalAvailableInflow = Number(initialBalance || 0) + Number(totalIncome || 0);
 
   const biggestCategory = byCategory.find((c) => c.total > 0) || null;
   const expenseDiffPct =
@@ -129,8 +132,8 @@ export default function MonthlySummary({
   }
 
   const incomeVsExpenseRatio =
-    totalIncome + totalExpense > 0
-      ? Math.round((totalIncome / (totalIncome + totalExpense)) * 100)
+    totalAvailableInflow + totalExpense > 0
+      ? Math.round((totalAvailableInflow / (totalAvailableInflow + totalExpense)) * 100)
       : 50;
 
   return (
@@ -205,7 +208,7 @@ export default function MonthlySummary({
         <div className="space-y-1.5">
           <div className="flex justify-between text-xs">
             <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-              ⬆️ Receitas: {formatCurrency(totalIncome)}
+              ⬆️ {initialBalance > 0 ? 'Saldo + Receitas' : 'Receitas'}: {formatCurrency(totalAvailableInflow)}
             </span>
             <span className="text-rose-600 dark:text-rose-400 font-semibold">
               ⬇️ Gastos: {formatCurrency(totalExpense)}
