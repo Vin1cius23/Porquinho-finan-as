@@ -511,9 +511,19 @@ export default function App() {
           <header className="bg-emerald-700 dark:bg-slate-900 text-white px-3.5 pt-[max(env(safe-area-inset-top,0px),2.6rem)] sm:pt-2.5 pb-2.5 border-b border-emerald-600/30 dark:border-slate-800 shrink-0">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-[11px] text-emerald-100/90 truncate">
-                  Olá, {user.name.split(' ')[0]} 👋
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[11px] text-emerald-100/90 truncate">
+                    Olá, <strong>{user.name.split(' ')[0]}</strong> 👋
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="px-1.5 py-0.5 rounded bg-white/15 hover:bg-white/25 text-[9px] font-semibold text-white transition cursor-pointer shrink-0"
+                    title="Sair ou trocar para outra conta"
+                  >
+                    Trocar conta
+                  </button>
+                </div>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="text-base sm:text-lg font-extrabold tracking-tight whitespace-nowrap">
                     {hideBalance
