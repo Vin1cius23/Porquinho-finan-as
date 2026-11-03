@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Aplicativo web de controle financeiro pessoal baseado em conversa com IA (Claude)",
   "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "dev": "node --no-warnings server/index.js",
     "build": "vite build",

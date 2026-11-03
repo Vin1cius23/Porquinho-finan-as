@@ -30,7 +30,7 @@ export function triggerGitAutoSync(reason = 'atualização automática') {
 }
 
 export function startGitAutoWatcher() {
-  const watchTargets = ['src', 'server', 'public', 'README.md', 'index.html', 'package.json', 'vite.config.js'];
+  const watchTargets = ['src', 'server', 'api', 'public', 'README.md', 'index.html', 'package.json', 'vite.config.js', 'vercel.json'];
 
   for (const target of watchTargets) {
     const fullPath = path.resolve(process.cwd(), target);

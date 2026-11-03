@@ -16,6 +16,7 @@ import {
 } from './ai.js';
 import {
   configureAndSyncSupabase,
+  ensureHydratedFromSupabase,
   getSupabaseStatus,
   syncAllLocalToSupabase,
   triggerBackgroundSupabaseSync,
@@ -23,6 +24,14 @@ import {
 
 const app = express();
 app.use(express.json({ limit: '5mb' }));
+
+// Em ambiente Serverless (Vercel), hidrata os dados do Supabase no cold start
+app.use('/api', async (req, res, next) => {
+  if (process.env.VERCEL) {
+    await ensureHydratedFromSupabase();
+  }
+  next();
+});
 
 function getFormattedMessages(userId) {
   return db
@@ -652,4 +661,8 @@ async function startServer() {
   });
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;
