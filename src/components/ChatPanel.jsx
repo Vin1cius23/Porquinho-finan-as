@@ -229,21 +229,21 @@ export default function ChatPanel({
   return (
     <div className="flex flex-col h-full bg-[#efeae2] dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
       {/* Cabeçalho estilo WhatsApp com botão de construtor rápido */}
-      <div className="bg-emerald-700 dark:bg-emerald-900 text-white px-4 py-3 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-emerald-500/30 border border-emerald-300/30 flex items-center justify-center">
-            <Bot className="w-5 h-5 text-white" />
+      <div className="bg-emerald-700 dark:bg-emerald-900 text-white px-3 py-2.5 flex items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-9 h-9 rounded-full bg-emerald-500/30 border border-emerald-300/30 flex items-center justify-center shrink-0">
+            <Bot className="w-4 h-4 text-white" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="font-semibold text-sm">Assistente FinChat IA</h2>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/30 text-emerald-100">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <h2 className="font-semibold text-xs sm:text-sm truncate">Assistente FinChat IA</h2>
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-emerald-500/30 text-emerald-100 shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
-                Interativo
+                Online
               </span>
             </div>
-            <p className="text-[11px] text-emerald-100/90">
-              Digite livremente ou toque nos botões rápidos abaixo
+            <p className="text-[10px] text-emerald-100/90 truncate">
+              Digite livremente ou use os atalhos abaixo
             </p>
           </div>
         </div>
@@ -251,15 +251,15 @@ export default function ChatPanel({
         <button
           type="button"
           onClick={() => setShowQuickBuilder((v) => !v)}
-          className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+          className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold whitespace-nowrap shrink-0 transition cursor-pointer ${
             showQuickBuilder
               ? 'bg-white text-emerald-800 shadow'
               : 'bg-emerald-600/70 hover:bg-emerald-600 text-white border border-emerald-400/30'
           }`}
           title="Lançamento rápido por cliques"
         >
-          <Zap className="w-3.5 h-3.5" />
-          <span>Lançar 1-Click</span>
+          <Zap className="w-3.5 h-3.5 shrink-0" />
+          <span>1-Click</span>
         </button>
       </div>
 
