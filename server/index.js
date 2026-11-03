@@ -14,6 +14,12 @@ import {
   getTodaySaoPaulo,
   interpretUserMessage,
 } from './ai.js';
+import {
+  configureAndSyncSupabase,
+  getSupabaseStatus,
+  syncAllLocalToSupabase,
+  triggerBackgroundSupabaseSync,
+} from './supabase.js';
 
 const app = express();
 app.use(express.json({ limit: '5mb' }));
@@ -154,9 +160,11 @@ function buildFinancialContext(userId, targetMonth = null) {
 }
 
 function buildSnapshotResponse(user, month = null, extra = {}) {
+  triggerBackgroundSupabaseSync();
   const ctx = buildFinancialContext(user.id, month);
   return {
     user,
+    supabaseStatus: getSupabaseStatus(),
     messages: getFormattedMessages(user.id),
     transactions: ctx.allTransactions,
     categories: ctx.categories,
@@ -179,6 +187,25 @@ function buildSnapshotResponse(user, month = null, extra = {}) {
     ...extra,
   };
 }
+
+// --- ROTAS SUPABASE CLOUD SYNC ---
+app.get('/api/supabase/status', authMiddleware, async (req, res) => {
+  const status = await syncAllLocalToSupabase();
+  res.json({ supabaseStatus: status });
+});
+
+app.post('/api/supabase/connect', authMiddleware, async (req, res) => {
+  try {
+    const { apiKey } = req.body;
+    const status = await configureAndSyncSupabase(apiKey);
+    if (!status.connected) {
+      return res.status(400).json({ error: status.error || 'Não foi possível conectar ao Supabase.', supabaseStatus: status });
+    }
+    return res.json({ supabaseStatus: status });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+});
 
 // --- ROTAS DE AUTENTICAÇÃO ---
 app.post('/api/auth/register', registerHandler);

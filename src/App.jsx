@@ -16,6 +16,8 @@ import {
   EyeOff,
   Wifi,
   BatteryCharging,
+  Cloud,
+  X,
 } from 'lucide-react';
 import AuthModal from './components/AuthModal.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
@@ -49,6 +51,15 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [newSheetBadge, setNewSheetBadge] = useState(0);
 
+  // Estado da integração com o Supabase (oeuomqygwnabyaikdjzx)
+  const [supabaseStatus, setSupabaseStatus] = useState({
+    connected: false,
+    projectUrl: 'https://oeuomqygwnabyaikdjzx.supabase.co',
+  });
+  const [showSupabaseModal, setShowSupabaseModal] = useState(false);
+  const [supabaseKeyInput, setSupabaseKeyInput] = useState('');
+  const [supabaseConnecting, setSupabaseConnecting] = useState(false);
+
   function showToast(text) {
     setToast(text);
     setTimeout(() => {
@@ -59,6 +70,7 @@ export default function App() {
   function applySnapshot(data) {
     if (!data) return;
     if (data.user) setUser(data.user);
+    if (data.supabaseStatus) setSupabaseStatus(data.supabaseStatus);
     if (data.messages) setMessages(data.messages);
     if (data.transactions) setTransactions(data.transactions);
     if (data.categories) setCategories(data.categories);
@@ -371,6 +383,32 @@ export default function App() {
     showToast(`Filtrando planilha por: ${categoryName}`);
   }
 
+  async function handleConnectSupabase(e) {
+    e.preventDefault();
+    if (!supabaseKeyInput.trim()) return;
+    setSupabaseConnecting(true);
+    try {
+      const res = await fetch('/api/supabase/connect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ apiKey: supabaseKeyInput.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao conectar com Supabase');
+      setSupabaseStatus(data.supabaseStatus);
+      setShowSupabaseModal(false);
+      setSupabaseKeyInput('');
+      showToast('☁️ Conectado e sincronizado com o Supabase!');
+    } catch (err) {
+      alert('Erro ao conectar com o Supabase: ' + err.message);
+    } finally {
+      setSupabaseConnecting(false);
+    }
+  }
+
   if (!token || !user || user.onboarded === 0) {
     return (
       <AuthModal
@@ -445,6 +483,19 @@ export default function App() {
               <div className="flex items-center gap-1">
                 <button
                   type="button"
+                  onClick={() => setShowSupabaseModal(true)}
+                  className={`px-2 py-1.5 rounded-full text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
+                    supabaseStatus?.connected
+                      ? 'bg-emerald-400/25 text-emerald-100 border border-emerald-300/40'
+                      : 'bg-amber-400/20 text-amber-200 border border-amber-300/40'
+                  }`}
+                  title="Configurar / Ver sincronização Supabase"
+                >
+                  <Cloud className="w-3.5 h-3.5" />
+                  <span>{supabaseStatus?.connected ? 'Supabase OK' : 'Conectar DB'}</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setDarkMode(!darkMode)}
                   className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer"
                   title="Tema claro / escuro"
@@ -502,6 +553,69 @@ export default function App() {
             <div className="absolute top-28 left-4 right-4 z-50 flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-900/95 dark:bg-emerald-600 text-white text-xs font-semibold shadow-lg animate-pop-in">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 dark:text-white shrink-0" />
               <span className="truncate">{toast}</span>
+            </div>
+          )}
+
+          {/* Modal de Conexão Direta com o Supabase (oeuomqygwnabyaikdjzx) */}
+          {showSupabaseModal && (
+            <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-pop-in">
+              <div className="w-full bg-white dark:bg-slate-900 rounded-3xl p-5 space-y-3 border border-slate-200 dark:border-slate-800 shadow-2xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Cloud className="w-5 h-5 text-emerald-500" />
+                    <h3 className="font-bold text-sm">Banco Supabase Nuvem</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowSupabaseModal(false)}
+                    className="p-1 rounded-full bg-slate-100 dark:bg-slate-800 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 text-xs space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Projeto:</span>
+                    <strong className="font-mono text-[11px]">oeuomqygwnabyaikdjzx</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Status:</span>
+                    <strong className={supabaseStatus?.connected ? 'text-emerald-500' : 'text-amber-500'}>
+                      {supabaseStatus?.connected ? 'Conectado e Sincronizando' : 'Aguardando Chave API'}
+                    </strong>
+                  </div>
+                </div>
+
+                <form onSubmit={handleConnectSupabase} className="space-y-2.5 text-xs">
+                  <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Como você já rodou o SQL, cole abaixo a chave <strong>service_role (secret)</strong> do seu projeto para sincronizar todos os lançamentos em tempo real:
+                  </p>
+                  <a
+                    href="https://supabase.com/dashboard/project/oeuomqygwnabyaikdjzx/settings/api-keys"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block text-emerald-600 dark:text-emerald-400 font-semibold hover:underline"
+                  >
+                    👉 Abrir página de chaves do seu projeto no Supabase ↗
+                  </a>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Cole aqui a chave service_role / secret..."
+                    value={supabaseKeyInput}
+                    onChange={(e) => setSupabaseKeyInput(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs outline-none focus:border-emerald-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={supabaseConnecting}
+                    className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold cursor-pointer disabled:opacity-50"
+                  >
+                    {supabaseConnecting ? 'Sincronizando com Supabase...' : 'Conectar e Enviar Dados Agora'}
+                  </button>
+                </form>
+              </div>
             </div>
           )}
 
