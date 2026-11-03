@@ -225,11 +225,11 @@ function inferCategoryAndDesc(text, availableCategories) {
   const rules = [
     { category: 'Alimentação', keywords: ['mercado', 'supermercado', 'ifood', 'padaria', 'restaurante', 'almoço', 'almoco', 'jantar', 'lanche', 'café', 'cafe', 'feira', 'açougue', 'pizza', 'hamburguer', 'alimentação', 'alimentacao', 'comida'] },
     { category: 'Transporte', keywords: ['uber', '99', 'gasolina', 'combustível', 'combustivel', 'etanol', 'ônibus', 'onibus', 'metrô', 'metro', 'estacionamento', 'pedágio', 'pedagio', 'transporte', 'oficina'] },
-    { category: 'Moradia', keywords: ['aluguel', 'condomínio', 'condominio', 'luz', 'energia', 'enel', 'água', 'agua', 'sabesp', 'gás', 'gas', 'iptu', 'internet', 'moradia', 'casa'] },
+    { category: 'Moradia', keywords: ['aluguel', 'condomínio', 'condominio', 'luz', 'energia', 'enel', 'água', 'agua', 'sabesp', 'gás', 'gas', 'iptu', 'internet', 'moradia', 'casa', 'geladeira', 'fogão', 'microondas', 'sofá', 'cama', 'móvel', 'moveis'] },
     { category: 'Saúde', keywords: ['farmácia', 'farmacia', 'remédio', 'remedio', 'médico', 'medico', 'consulta', 'exame', 'dentista', 'plano de saúde', 'academia', 'saúde', 'saude'] },
     { category: 'Educação', keywords: ['curso', 'faculdade', 'escola', 'livro', 'apostila', 'inglês', 'ingles', 'udemy', 'alura', 'educação', 'educacao'] },
     { category: 'Assinaturas', keywords: ['netflix', 'spotify', 'amazon', 'prime', 'disney', 'icloud', 'youtube', 'chatgpt', 'claude', 'assinatura', 'mensalidade'] },
-    { category: 'Lazer', keywords: ['cinema', 'show', 'bar', 'cerveja', 'viagem', 'hotel', 'passeio', 'jogo', 'game', 'shopping', 'presente', 'lazer', 'fone', 'roupa'] },
+    { category: 'Lazer', keywords: ['cinema', 'show', 'bar', 'cerveja', 'viagem', 'hotel', 'passeio', 'jogo', 'game', 'shopping', 'presente', 'lazer', 'fone', 'roupa', 'notebook', 'celular', 'computador', 'tv', 'televisão', 'monitor', 'tênis', 'tenis', 'sapato', 'perfume'] },
     { category: 'Dívidas', keywords: ['empréstimo', 'emprestimo', 'fatura', 'juros', 'dívida', 'divida', 'financiamento', 'acordo'] },
     { category: 'Investimentos', keywords: ['tesouro', 'cdb', 'ação', 'acoes', 'fii', 'bitcoin', 'cripto', 'poupança', 'poupanca', 'investimento', 'aporte', 'reserva'] },
   ];
@@ -354,13 +354,17 @@ function localSmartInterpreter({ message, todayISO, categories, accounts, financ
   }
 
   // 5. Criação ou continuação de lançamento
-  const isIncome = /\b(recebi|ganhei|sal[aá]rio|freela|freelance|rendeu|dividendo|reembolso|entrou|depositaram)\b/i.test(lower);
-  const amount = parseAmountPT(message) ?? partialDraft?.amount ?? null;
-  const inferred = inferCategoryAndDesc(message, categories);
-  const category = inferred.category || partialDraft?.category || null;
-  const date = parseRelativeDatePT(message, todayISO) || partialDraft?.date || todayISO;
+  // Se o usuário iniciou uma nova frase explícita ("gastei...", "comprei...", "paguei...", "recebi..."), ignora rascunho anterior abandonado
+  const startsNewTransaction = /\b(gastei|paguei|comprei|recebi|ganhei)\b/i.test(lower);
+  const activeDraft = startsNewTransaction ? null : partialDraft;
 
-  let paymentMethod = partialDraft?.payment_method || 'Débito';
+  const isIncome = /\b(recebi|ganhei|sal[aá]rio|freela|freelance|rendeu|dividendo|reembolso|entrou|depositaram)\b/i.test(lower);
+  const amount = parseAmountPT(message) ?? activeDraft?.amount ?? null;
+  const inferred = inferCategoryAndDesc(message, categories);
+  const category = inferred.category || activeDraft?.category || null;
+  const date = parseRelativeDatePT(message, todayISO) || activeDraft?.date || todayISO;
+
+  let paymentMethod = activeDraft?.payment_method || 'Débito';
   if (/\b(cr[eé]dito|cart[aã]o|parcelad[oa]|\d+\s*x)\b/i.test(lower)) paymentMethod = 'Crédito';
   else if (/\bpix\b/i.test(lower)) paymentMethod = 'PIX';
   else if (/\b(dinheiro|esp[eé]cie)\b/i.test(lower)) paymentMethod = 'Dinheiro';
@@ -368,9 +372,9 @@ function localSmartInterpreter({ message, todayISO, categories, accounts, financ
   else if (isIncome) paymentMethod = 'PIX';
 
   const installmentsMatch = lower.match(/\b(\d{1,2})\s*(?:x|vezes|parcelas)\b/i);
-  const installments = installmentsMatch ? Math.max(1, parseInt(installmentsMatch[1], 10)) : (partialDraft?.installments || 1);
-  const installmentInfo = installments > 1 ? `1/${installments}` : (partialDraft?.installment_info || '');
-  const isRecurring = /\b(recorrente|mensal|todo\s+m[eê]s|assinatura|aluguel|sal[aá]rio|condom[ií]nio)\b/i.test(lower) || Boolean(partialDraft?.is_recurring);
+  const installments = installmentsMatch ? Math.max(1, parseInt(installmentsMatch[1], 10)) : (activeDraft?.installments || 1);
+  const installmentInfo = installments > 1 ? `1/${installments}` : (activeDraft?.installment_info || '');
+  const isRecurring = /\b(recorrente|mensal|todo\s+m[eê]s|assinatura|aluguel|sal[aá]rio|condom[ií]nio)\b/i.test(lower) || Boolean(activeDraft?.is_recurring);
 
   const defaultAcc = paymentMethod === 'Crédito'
     ? (accounts.find((a) => a.toLowerCase().includes('cart')) || accounts[0] || 'Cartão de Crédito')
@@ -378,14 +382,16 @@ function localSmartInterpreter({ message, todayISO, categories, accounts, financ
 
   // Limpa descrição amigável
   const prevDesc =
-    partialDraft?.description &&
-    !['Despesa geral', 'Receita recebida', 'Lançamento', 'Outros'].includes(partialDraft.description)
-      ? partialDraft.description
+    activeDraft?.description &&
+    !['Despesa geral', 'Receita recebida', 'Lançamento', 'Outros'].includes(activeDraft.description)
+      ? activeDraft.description
       : null;
   let description = prevDesc || inferred.keywordDesc || '';
   if (!description || description === 'Outros') {
     const cleaned = message
-      .replace(/(?:gastei|paguei|comprei|recebi|ganhei|no|na|em|de|do|da|hoje|ontem|anteontem|reais|pila|conto|r\$|\d+(?:[.,]\d+)?)/gi, ' ')
+      .replace(/\b(\d+)\s*(?:x|vezes|parcelas?)\b/gi, ' ')
+      .replace(/(?:r\$\s*)?\d+(?:[.,]\d+)?/gi, ' ')
+      .replace(/(?:^|\s)(?:gastei|paguei|comprei|recebi|ganhei|um|uma|o|a|no|na|em|de|do|da|pelo|pela|por|para|hoje|ontem|anteontem|reais|real|pila|conto|mil|cart[aã]o|cr[eé]dito|d[eé]bito|pix|dinheiro|boleto)(?=\s|$)/gi, ' ')
       .replace(/\s+/g, ' ')
       .trim();
     description = cleaned.length >= 2
@@ -394,7 +400,7 @@ function localSmartInterpreter({ message, todayISO, categories, accounts, financ
   }
 
   const draftTx = {
-    type: partialDraft?.type || (isIncome ? 'income' : 'expense'),
+    type: activeDraft?.type || (isIncome ? 'income' : 'expense'),
     amount,
     category,
     date,
