@@ -182,7 +182,7 @@ function parseRelativeDatePT(text, todayISO) {
 /**
  * Extrai valores monetários informais ("50 pila", "1,5 mil", "3.200", "45,90")
  */
-function parseAmountPT(text) {
+export function parseAmountPT(text) {
   const lower = text
     .toLowerCase()
     .replace(/\b(\d+)\s*(?:x|vezes|parcelas?)\b/gi, '') // remove "3x", "10 parcelas", "5 vezes"
@@ -256,8 +256,8 @@ function inferCategoryAndDesc(text, availableCategories) {
     }
   }
 
-  if (/\b(sal[aá]rio|freela|freelance|pix recebido|rendimento|venda|reembolso)\b/.test(lower)) {
-    return { category: 'Outros', keywordDesc: lower.includes('sal') ? 'Salário' : 'Receita' };
+  if (/\b(sal[aá]rio|freela|freelance|pix recebido|rendimento|venda|reembolso|extra|bico)\b/.test(lower)) {
+    return { category: 'Outros', keywordDesc: lower.includes('sal') ? 'Salário' : (lower.includes('extra') ? 'Renda Extra' : 'Receita') };
   }
 
   return { category: null, keywordDesc: null };
@@ -332,7 +332,7 @@ function localSmartInterpreter({ message, todayISO, categories, accounts, financ
   }
 
   // 4. Consultas: "quanto gastei esse mês..."
-  if (/(quanto\s+(eu\s+)?gastei|qual\s+o\s+total|gasto\s+com|gastos\s+com|quanto\s+recebi)/i.test(lower)) {
+  if (/(quanto\s+(eu\s+)?gastei|qual\s+o\s+total|gasto\s+com|gastos\s+com|quanto\s+recebi|qual\s+(é\s+)?(o\s+)?meu\s+saldo)/i.test(lower)) {
     for (const cat of categories) {
       if (lower.includes(cat.toLowerCase())) {
         const found = (financialSummary.byCategory || []).find(
@@ -350,9 +350,13 @@ function localSmartInterpreter({ message, todayISO, categories, accounts, financ
         };
       }
     }
+    const initBal = Number(financialSummary.initialBalance || 0);
+    const totalAvailable = Number(
+      financialSummary.currentTotalBalance ?? initBal + financialSummary.totalIncome - financialSummary.totalExpense
+    );
     return {
       intent: 'query_finances',
-      reply: `Neste mês você acumulou:\n• **Receitas:** ${formatBRL(financialSummary.totalIncome)}\n• **Despesas:** ${formatBRL(financialSummary.totalExpense)}\n• **Saldo do mês:** ${formatBRL(financialSummary.totalIncome - financialSummary.totalExpense)}`,
+      reply: `Aqui está o seu resumo atual:\n• **Saldo Inicial em Conta:** ${formatBRL(initBal)}\n• **Receitas do mês:** ${formatBRL(financialSummary.totalIncome)}\n• **Despesas do mês:** ${formatBRL(financialSummary.totalExpense)}\n• **Saldo Disponível Atual:** **${formatBRL(totalAvailable)}**`,
       missing_field: 'none',
       transaction: null,
     };
@@ -360,10 +364,10 @@ function localSmartInterpreter({ message, todayISO, categories, accounts, financ
 
   // 5. Criação ou continuação de lançamento
   // Se o usuário iniciou uma nova frase explícita ("gastei...", "comprei...", "paguei...", "recebi..."), ignora rascunho anterior abandonado
-  const startsNewTransaction = /\b(gastei|paguei|comprei|recebi|ganhei)\b/i.test(lower);
+  const startsNewTransaction = /\b(gastei|paguei|comprei|recebi|ganhei|fiz\s+um\s+extra|entrou|caiu)\b/i.test(lower);
   const activeDraft = startsNewTransaction ? null : partialDraft;
 
-  const isIncome = /\b(recebi|ganhei|sal[aá]rio|freela|freelance|rendeu|dividendo|reembolso|entrou|depositaram)\b/i.test(lower);
+  const isIncome = /\b(recebi|ganhei|sal[aá]rio|freela|freelance|rendeu|dividendo|reembolso|entrou|depositaram|fiz\s+um\s+extra|renda\s+extra|bico|caiu\s+na\s+conta|depositei|coloquei\s+na\s+conta)\b/i.test(lower);
   const amount = parseAmountPT(message) ?? activeDraft?.amount ?? null;
   const inferred = inferCategoryAndDesc(message, categories);
   const category = inferred.category || activeDraft?.category || null;
