@@ -7,12 +7,14 @@ import {
   loginHandler,
   onboardingHandler,
   registerHandler,
+  signToken,
 } from './auth.js';
 import {
   formatBRDate,
   formatBRL,
   getTodaySaoPaulo,
   interpretUserMessage,
+  parseAmountPT,
 } from './ai.js';
 import {
   configureAndSyncSupabase,
@@ -152,9 +154,11 @@ function buildFinancialContext(userId, targetMonth = null) {
   return {
     currentMonth,
     prevMonth,
+    initialAccountsBalance,
     totalIncome,
     totalExpense,
-    balanceMonth: totalIncome - totalExpense,
+    balanceMonth: initialAccountsBalance + totalIncome - totalExpense,
+    netMonthFlow: totalIncome - totalExpense,
     prevIncome,
     prevExpense,
     currentTotalBalance,
@@ -173,6 +177,7 @@ function buildSnapshotResponse(user, month = null, extra = {}) {
   const ctx = buildFinancialContext(user.id, month);
   return {
     user,
+    token: signToken(user),
     supabaseStatus: getSupabaseStatus(),
     messages: getFormattedMessages(user.id),
     transactions: ctx.allTransactions,
@@ -182,9 +187,11 @@ function buildSnapshotResponse(user, month = null, extra = {}) {
     summary: {
       currentMonth: ctx.currentMonth,
       prevMonth: ctx.prevMonth,
+      initialBalance: ctx.initialAccountsBalance,
       totalIncome: ctx.totalIncome,
       totalExpense: ctx.totalExpense,
       balanceMonth: ctx.balanceMonth,
+      netMonthFlow: ctx.netMonthFlow,
       prevIncome: ctx.prevIncome,
       prevExpense: ctx.prevExpense,
       currentTotalBalance: ctx.currentTotalBalance,
@@ -271,12 +278,41 @@ app.post('/api/chat/message', authMiddleware, async (req, res) => {
       'INSERT INTO chat_messages (user_id, role, content, action_status) VALUES (?, ?, ?, ?)'
     ).run(userId, 'user', text, 'none');
 
+    // Comando direto no chat para definir/atualizar o saldo base da conta ("meu saldo é 2000", "coloquei um saldo de 2000", "tenho 2000 de saldo")
+    if (
+      /\b(meu\s+saldo(\s+[eé])?|saldo\s+inicial|coloquei\s+(?:um\s+)?saldo|tenho\s+.*de\s+saldo|definir\s+saldo|ajustar\s+saldo|mudar\s+saldo)\b/i.test(
+        text
+      )
+    ) {
+      const parsedBal = parseAmountPT(text);
+      if (parsedBal !== null) {
+        const mainAcc = db
+          .prepare("SELECT id, name FROM accounts WHERE user_id = ? AND type != 'credit_card' ORDER BY id ASC LIMIT 1")
+          .get(userId);
+        if (mainAcc) {
+          db.prepare('UPDATE accounts SET initial_balance = ? WHERE id = ?').run(parsedBal, mainAcc.id);
+        } else {
+          db.prepare(
+            'INSERT INTO accounts (user_id, name, type, initial_balance, credit_limit) VALUES (?, ?, ?, ?, 0)'
+          ).run(userId, 'Conta Corrente Principal', 'checking', parsedBal);
+        }
+        const updatedCtx = buildFinancialContext(userId, month);
+        const balReply = `✅ Atualizei o saldo base da sua conta para **${formatBRL(parsedBal)}**! Descontando suas saídas e somando suas entradas, seu **Saldo Disponível Atual** é de **${formatBRL(updatedCtx.currentTotalBalance)}**.`;
+        db.prepare(
+          'INSERT INTO chat_messages (user_id, role, content, action_status) VALUES (?, ?, ?, ?)'
+        ).run(userId, 'assistant', balReply, 'none');
+        return res.json(await buildSnapshotAfterWrite(req.user, month));
+      }
+    }
+
     const ctx = buildFinancialContext(userId, month);
     const aiResult = await interpretUserMessage({
       message: text,
       categories: ctx.categories.map((c) => c.name),
       accounts: ctx.accounts.map((a) => a.name),
       financialSummary: {
+        initialBalance: ctx.initialAccountsBalance,
+        currentTotalBalance: ctx.currentTotalBalance,
         totalIncome: ctx.totalIncome,
         totalExpense: ctx.totalExpense,
         byCategory: ctx.byCategory.filter((c) => c.total > 0 || c.budget > 0),
@@ -592,6 +628,49 @@ app.post('/api/accounts', authMiddleware, async (req, res) => {
       due_day ? Number(due_day) : null
     );
     return res.status(201).json(await buildSnapshotAfterWrite(req.user));
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/accounts/balance', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const newBalance = Number(req.body.initial_balance) || 0;
+    const mainAcc = db
+      .prepare("SELECT id FROM accounts WHERE user_id = ? AND type != 'credit_card' ORDER BY id ASC LIMIT 1")
+      .get(userId);
+    if (mainAcc) {
+      db.prepare('UPDATE accounts SET initial_balance = ? WHERE id = ?').run(newBalance, mainAcc.id);
+    } else {
+      db.prepare(
+        'INSERT INTO accounts (user_id, name, type, initial_balance, credit_limit) VALUES (?, ?, ?, ?, 0)'
+      ).run(userId, 'Conta Corrente Principal', 'checking', newBalance);
+    }
+    return res.json(await buildSnapshotAfterWrite(req.user));
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/accounts/:id', authMiddleware, async (req, res) => {
+  try {
+    const acc = db
+      .prepare('SELECT * FROM accounts WHERE id = ? AND user_id = ?')
+      .get(req.params.id, req.user.id);
+    if (!acc) return res.status(404).json({ error: 'Conta não encontrada.' });
+
+    const newName = req.body.name !== undefined ? String(req.body.name).trim() : acc.name;
+    const newBalance =
+      req.body.initial_balance !== undefined ? Number(req.body.initial_balance) || 0 : acc.initial_balance;
+    const newLimit =
+      req.body.credit_limit !== undefined ? Number(req.body.credit_limit) || 0 : acc.credit_limit;
+
+    db.prepare(
+      'UPDATE accounts SET name = ?, initial_balance = ?, credit_limit = ? WHERE id = ? AND user_id = ?'
+    ).run(newName, newBalance, newLimit, acc.id, req.user.id);
+
+    return res.json(await buildSnapshotAfterWrite(req.user));
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
