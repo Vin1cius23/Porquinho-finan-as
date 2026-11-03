@@ -16,7 +16,6 @@ import {
   EyeOff,
   Wifi,
   BatteryCharging,
-  Cloud,
   Download,
   X,
 } from 'lucide-react';
@@ -51,15 +50,6 @@ export default function App() {
   const [externalCategoryFilter, setExternalCategoryFilter] = useState('');
   const [toast, setToast] = useState(null);
   const [newSheetBadge, setNewSheetBadge] = useState(0);
-
-  // Estado da integração com o Supabase (oeuomqygwnabyaikdjzx)
-  const [supabaseStatus, setSupabaseStatus] = useState({
-    connected: false,
-    projectUrl: 'https://oeuomqygwnabyaikdjzx.supabase.co',
-  });
-  const [showSupabaseModal, setShowSupabaseModal] = useState(false);
-  const [supabaseKeyInput, setSupabaseKeyInput] = useState('');
-  const [supabaseConnecting, setSupabaseConnecting] = useState(false);
 
   // Estados de instalação do PWA (Progressive Web App)
   const [deferredPwaPrompt, setDeferredPwaPrompt] = useState(null);
@@ -118,7 +108,6 @@ export default function App() {
   function applySnapshot(data) {
     if (!data) return;
     if (data.user) setUser(data.user);
-    if (data.supabaseStatus) setSupabaseStatus(data.supabaseStatus);
     if (data.messages) setMessages(data.messages);
     if (data.transactions) setTransactions(data.transactions);
     if (data.categories) setCategories(data.categories);
@@ -431,32 +420,6 @@ export default function App() {
     showToast(`Filtrando planilha por: ${categoryName}`);
   }
 
-  async function handleConnectSupabase(e) {
-    e.preventDefault();
-    if (!supabaseKeyInput.trim()) return;
-    setSupabaseConnecting(true);
-    try {
-      const res = await fetch('/api/supabase/connect', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ apiKey: supabaseKeyInput.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao conectar com Supabase');
-      setSupabaseStatus(data.supabaseStatus);
-      setShowSupabaseModal(false);
-      setSupabaseKeyInput('');
-      showToast('☁️ Conectado e sincronizado com o Supabase!');
-    } catch (err) {
-      alert('Erro ao conectar com o Supabase: ' + err.message);
-    } finally {
-      setSupabaseConnecting(false);
-    }
-  }
-
   if (!token || !user || user.onboarded === 0) {
     return (
       <AuthModal
@@ -554,19 +517,6 @@ export default function App() {
                     <span>App</span>
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setShowSupabaseModal(true)}
-                  className={`p-1.5 sm:px-2 sm:py-1 rounded-full text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
-                    supabaseStatus?.connected
-                      ? 'bg-emerald-400/25 text-emerald-100 border border-emerald-300/40'
-                      : 'bg-amber-400/20 text-amber-200 border border-amber-300/40'
-                  }`}
-                  title="Status do Banco Supabase"
-                >
-                  <Cloud className="w-3.5 h-3.5 shrink-0" />
-                  <span className="hidden xs:inline">{supabaseStatus?.connected ? 'OK' : 'DB'}</span>
-                </button>
                 <button
                   type="button"
                   onClick={() => setDarkMode(!darkMode)}
@@ -683,69 +633,6 @@ export default function App() {
                 >
                   Entendi!
                 </button>
-              </div>
-            </div>
-          )}
-
-          {/* Modal de Conexão Direta com o Supabase (oeuomqygwnabyaikdjzx) */}
-          {showSupabaseModal && (
-            <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-pop-in">
-              <div className="w-full bg-white dark:bg-slate-900 rounded-3xl p-5 space-y-3 border border-slate-200 dark:border-slate-800 shadow-2xl">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Cloud className="w-5 h-5 text-emerald-500" />
-                    <h3 className="font-bold text-sm">Banco Supabase Nuvem</h3>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowSupabaseModal(false)}
-                    className="p-1 rounded-full bg-slate-100 dark:bg-slate-800 cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 text-xs space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Projeto:</span>
-                    <strong className="font-mono text-[11px]">oeuomqygwnabyaikdjzx</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Status:</span>
-                    <strong className={supabaseStatus?.connected ? 'text-emerald-500' : 'text-amber-500'}>
-                      {supabaseStatus?.connected ? 'Conectado e Sincronizando' : 'Aguardando Chave API'}
-                    </strong>
-                  </div>
-                </div>
-
-                <form onSubmit={handleConnectSupabase} className="space-y-2.5 text-xs">
-                  <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Como você já rodou o SQL, cole abaixo a chave <strong>service_role (secret)</strong> do seu projeto para sincronizar todos os lançamentos em tempo real:
-                  </p>
-                  <a
-                    href="https://supabase.com/dashboard/project/oeuomqygwnabyaikdjzx/settings/api-keys"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block text-emerald-600 dark:text-emerald-400 font-semibold hover:underline"
-                  >
-                    👉 Abrir página de chaves do seu projeto no Supabase ↗
-                  </a>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Cole aqui a chave service_role / secret..."
-                    value={supabaseKeyInput}
-                    onChange={(e) => setSupabaseKeyInput(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs outline-none focus:border-emerald-500"
-                  />
-                  <button
-                    type="submit"
-                    disabled={supabaseConnecting}
-                    className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold cursor-pointer disabled:opacity-50"
-                  >
-                    {supabaseConnecting ? 'Sincronizando com Supabase...' : 'Conectar e Enviar Dados Agora'}
-                  </button>
-                </form>
               </div>
             </div>
           )}
