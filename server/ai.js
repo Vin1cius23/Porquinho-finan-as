@@ -185,7 +185,7 @@ function parseRelativeDatePT(text, todayISO) {
 function parseAmountPT(text) {
   const lower = text
     .toLowerCase()
-    .replace(/\b(\d+)\s*x\b/g, '') // remove "3x" para não confundir com valor
+    .replace(/\b(\d+)\s*(?:x|vezes|parcelas?)\b/gi, '') // remove "3x", "10 parcelas", "5 vezes"
     .replace(/\bdia\s+\d{1,2}\b/g, '') // remove "dia 10"
     .replace(/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/g, ''); // remove datas dd/mm
 
@@ -377,7 +377,12 @@ function localSmartInterpreter({ message, todayISO, categories, accounts, financ
     : (accounts[0] || 'Conta Principal');
 
   // Limpa descrição amigável
-  let description = partialDraft?.description || inferred.keywordDesc || '';
+  const prevDesc =
+    partialDraft?.description &&
+    !['Despesa geral', 'Receita recebida', 'Lançamento', 'Outros'].includes(partialDraft.description)
+      ? partialDraft.description
+      : null;
+  let description = prevDesc || inferred.keywordDesc || '';
   if (!description || description === 'Outros') {
     const cleaned = message
       .replace(/(?:gastei|paguei|comprei|recebi|ganhei|no|na|em|de|do|da|hoje|ontem|anteontem|reais|pila|conto|r\$|\d+(?:[.,]\d+)?)/gi, ' ')
