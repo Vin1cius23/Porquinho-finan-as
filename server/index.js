@@ -19,6 +19,7 @@ import {
   ensureHydratedFromSupabase,
   getSupabaseStatus,
   syncAllLocalToSupabase,
+  syncUserToSupabase,
   triggerBackgroundSupabaseSync,
 } from './supabase.js';
 
@@ -169,7 +170,6 @@ function buildFinancialContext(userId, targetMonth = null) {
 }
 
 function buildSnapshotResponse(user, month = null, extra = {}) {
-  triggerBackgroundSupabaseSync(user.id);
   const ctx = buildFinancialContext(user.id, month);
   return {
     user,
@@ -195,6 +195,15 @@ function buildSnapshotResponse(user, month = null, extra = {}) {
     },
     ...extra,
   };
+}
+
+async function buildSnapshotAfterWrite(user, month = null, extra = {}) {
+  if (process.env.VERCEL) {
+    await syncUserToSupabase(user.id);
+  } else {
+    triggerBackgroundSupabaseSync(user.id);
+  }
+  return buildSnapshotResponse(user, month, extra);
 }
 
 // --- ROTAS SUPABASE CLOUD SYNC ---
@@ -286,7 +295,7 @@ app.post('/api/chat/message', authMiddleware, async (req, res) => {
         db.prepare(
           'INSERT INTO chat_messages (user_id, role, content, action_status) VALUES (?, ?, ?, ?)'
         ).run(userId, 'assistant', 'Você ainda não possui lançamentos para apagar.', 'none');
-        return res.json(buildSnapshotResponse(req.user, month));
+        return res.json(await buildSnapshotAfterWrite(req.user, month));
       }
 
       db.prepare('DELETE FROM transactions WHERE id = ? AND user_id = ?').run(lastTx.id, userId);
@@ -294,7 +303,7 @@ app.post('/api/chat/message', authMiddleware, async (req, res) => {
       db.prepare(
         'INSERT INTO chat_messages (user_id, role, content, action_status) VALUES (?, ?, ?, ?)'
       ).run(userId, 'assistant', replyText, 'none');
-      return res.json(buildSnapshotResponse(req.user, month, { deletedTransactionId: lastTx.id }));
+      return res.json(await buildSnapshotAfterWrite(req.user, month, { deletedTransactionId: lastTx.id }));
     }
 
     // Se ainda falta alguma informação essencial, salva o rascunho parcial com missing_field para exibir botões interativos
@@ -307,7 +316,7 @@ app.post('/api/chat/message', authMiddleware, async (req, res) => {
       db.prepare(
         'INSERT INTO chat_messages (user_id, role, content, pending_action_json, action_status) VALUES (?, ?, ?, ?, ?)'
       ).run(userId, 'assistant', aiResult.reply, draftPayload, 'none');
-      return res.json(buildSnapshotResponse(req.user, month));
+      return res.json(await buildSnapshotAfterWrite(req.user, month));
     }
 
     // Se o lançamento está pronto para confirmação, exibe os botões Confirmar / Editar / Cancelar
@@ -316,14 +325,14 @@ app.post('/api/chat/message', authMiddleware, async (req, res) => {
       db.prepare(
         'INSERT INTO chat_messages (user_id, role, content, pending_action_json, action_status) VALUES (?, ?, ?, ?, ?)'
       ).run(userId, 'assistant', aiResult.reply, txPayload, 'pending');
-      return res.json(buildSnapshotResponse(req.user, month));
+      return res.json(await buildSnapshotAfterWrite(req.user, month));
     }
 
     // Resposta de consulta ou conversa geral
     db.prepare(
       'INSERT INTO chat_messages (user_id, role, content, action_status) VALUES (?, ?, ?, ?)'
     ).run(userId, 'assistant', aiResult.reply, 'none');
-    return res.json(buildSnapshotResponse(req.user, month));
+    return res.json(await buildSnapshotAfterWrite(req.user, month));
   } catch (err) {
     console.error('Erro no chat:', err);
     return res.status(500).json({ error: 'Erro ao processar mensagem: ' + err.message });
@@ -331,7 +340,7 @@ app.post('/api/chat/message', authMiddleware, async (req, res) => {
 });
 
 // --- CONFIRMAR / EDITAR / CANCELAR LANÇAMENTO DO CHAT ---
-app.post('/api/chat/action', authMiddleware, (req, res) => {
+app.post('/api/chat/action', authMiddleware, async (req, res) => {
   try {
     const { messageId, action, updatedTransaction, month } = req.body;
     const userId = req.user.id;
@@ -348,7 +357,7 @@ app.post('/api/chat/action', authMiddleware, (req, res) => {
       db.prepare(
         'INSERT INTO chat_messages (user_id, role, content, action_status) VALUES (?, ?, ?, ?)'
       ).run(userId, 'assistant', 'Lançamento cancelado! Se precisar registrar outra coisa, é só falar.', 'none');
-      return res.json(buildSnapshotResponse(req.user, month, { status: 'cancelled' }));
+      return res.json(await buildSnapshotAfterWrite(req.user, month, { status: 'cancelled' }));
     }
 
     const txData = updatedTransaction || JSON.parse(msg.pending_action_json);
@@ -415,14 +424,14 @@ app.post('/api/chat/action', authMiddleware, (req, res) => {
       'INSERT INTO chat_messages (user_id, role, content, action_status) VALUES (?, ?, ?, ?)'
     ).run(userId, 'assistant', confirmReply, 'none');
 
-    return res.json(buildSnapshotResponse(req.user, month, { status: 'confirmed', createdIds }));
+    return res.json(await buildSnapshotAfterWrite(req.user, month, { status: 'confirmed', createdIds }));
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao confirmar lançamento: ' + err.message });
   }
 });
 
 // --- CRUD DE LANÇAMENTOS (PLANILHA INTERATIVA + IMPORTAÇÃO) ---
-app.post('/api/transactions', authMiddleware, (req, res) => {
+app.post('/api/transactions', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
     const items = Array.isArray(req.body.transactions) ? req.body.transactions : [req.body];
@@ -453,13 +462,13 @@ app.post('/api/transactions', authMiddleware, (req, res) => {
       );
       createdIds.push(Number(r.lastInsertRowid));
     }
-    return res.status(201).json(buildSnapshotResponse(req.user, req.body.month || null, { createdIds }));
+    return res.status(201).json(await buildSnapshotAfterWrite(req.user, req.body.month || null, { createdIds }));
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao salvar lançamento: ' + err.message });
   }
 });
 
-app.put('/api/transactions/:id', authMiddleware, (req, res) => {
+app.put('/api/transactions/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
@@ -507,32 +516,32 @@ app.put('/api/transactions/:id', authMiddleware, (req, res) => {
       userId
     );
 
-    return res.json(buildSnapshotResponse(req.user, req.body.month || null));
+    return res.json(await buildSnapshotAfterWrite(req.user, req.body.month || null));
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao atualizar lançamento: ' + err.message });
   }
 });
 
-app.delete('/api/transactions/:id', authMiddleware, (req, res) => {
+app.delete('/api/transactions/:id', authMiddleware, async (req, res) => {
   db.prepare('DELETE FROM transactions WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
-  return res.json(buildSnapshotResponse(req.user));
+  return res.json(await buildSnapshotAfterWrite(req.user));
 });
 
 // --- CATEGORIAS E ORÇAMENTO ---
-app.post('/api/categories', authMiddleware, (req, res) => {
+app.post('/api/categories', authMiddleware, async (req, res) => {
   try {
     const { name, monthly_budget, color } = req.body;
     if (!name) return res.status(400).json({ error: 'Informe o nome da categoria.' });
     db.prepare(
       'INSERT OR IGNORE INTO categories (user_id, name, monthly_budget, color) VALUES (?, ?, ?, ?)'
     ).run(req.user.id, String(name).trim(), Number(monthly_budget) || 0, color || '#10b981');
-    return res.status(201).json(buildSnapshotResponse(req.user));
+    return res.status(201).json(await buildSnapshotAfterWrite(req.user));
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-app.put('/api/categories/:id', authMiddleware, (req, res) => {
+app.put('/api/categories/:id', authMiddleware, async (req, res) => {
   try {
     const { name, monthly_budget } = req.body;
     const cat = db.prepare('SELECT * FROM categories WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
@@ -554,19 +563,19 @@ app.put('/api/categories/:id', authMiddleware, (req, res) => {
         cat.name
       );
     }
-    return res.json(buildSnapshotResponse(req.user));
+    return res.json(await buildSnapshotAfterWrite(req.user));
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-app.delete('/api/categories/:id', authMiddleware, (req, res) => {
+app.delete('/api/categories/:id', authMiddleware, async (req, res) => {
   db.prepare('DELETE FROM categories WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
-  return res.json(buildSnapshotResponse(req.user));
+  return res.json(await buildSnapshotAfterWrite(req.user));
 });
 
 // --- CONTAS E CARTÕES ---
-app.post('/api/accounts', authMiddleware, (req, res) => {
+app.post('/api/accounts', authMiddleware, async (req, res) => {
   try {
     const { name, type, initial_balance, credit_limit, closing_day, due_day } = req.body;
     if (!name) return res.status(400).json({ error: 'Informe o nome da conta ou cartão.' });
@@ -582,28 +591,28 @@ app.post('/api/accounts', authMiddleware, (req, res) => {
       closing_day ? Number(closing_day) : null,
       due_day ? Number(due_day) : null
     );
-    return res.status(201).json(buildSnapshotResponse(req.user));
+    return res.status(201).json(await buildSnapshotAfterWrite(req.user));
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-app.delete('/api/accounts/:id', authMiddleware, (req, res) => {
+app.delete('/api/accounts/:id', authMiddleware, async (req, res) => {
   db.prepare('DELETE FROM accounts WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
-  return res.json(buildSnapshotResponse(req.user));
+  return res.json(await buildSnapshotAfterWrite(req.user));
 });
 
 // --- METAS DE ECONOMIA ---
-app.post('/api/goals', authMiddleware, (req, res) => {
+app.post('/api/goals', authMiddleware, async (req, res) => {
   const { title, target_amount, current_amount, deadline } = req.body;
   if (!title || !target_amount) return res.status(400).json({ error: 'Informe título e valor da meta.' });
   db.prepare(
     'INSERT INTO goals (user_id, title, target_amount, current_amount, deadline) VALUES (?, ?, ?, ?, ?)'
   ).run(req.user.id, String(title).trim(), Number(target_amount), Number(current_amount) || 0, deadline || null);
-  return res.status(201).json(buildSnapshotResponse(req.user));
+  return res.status(201).json(await buildSnapshotAfterWrite(req.user));
 });
 
-app.put('/api/goals/:id', authMiddleware, (req, res) => {
+app.put('/api/goals/:id', authMiddleware, async (req, res) => {
   const { current_amount, target_amount, title } = req.body;
   const g = db.prepare('SELECT * FROM goals WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!g) return res.status(404).json({ error: 'Meta não encontrada.' });
@@ -613,16 +622,16 @@ app.put('/api/goals/:id', authMiddleware, (req, res) => {
     current_amount !== undefined ? Number(current_amount) : g.current_amount,
     req.params.id
   );
-  return res.json(buildSnapshotResponse(req.user));
+  return res.json(await buildSnapshotAfterWrite(req.user));
 });
 
-app.delete('/api/goals/:id', authMiddleware, (req, res) => {
+app.delete('/api/goals/:id', authMiddleware, async (req, res) => {
   db.prepare('DELETE FROM goals WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
-  return res.json(buildSnapshotResponse(req.user));
+  return res.json(await buildSnapshotAfterWrite(req.user));
 });
 
 // --- PRIVACIDADE: APAGAR TODOS OS DADOS DO USUÁRIO ---
-app.delete('/api/user/data', authMiddleware, (req, res) => {
+app.delete('/api/user/data', authMiddleware, async (req, res) => {
   const userId = req.user.id;
   db.prepare('DELETE FROM transactions WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId);
@@ -630,7 +639,7 @@ app.delete('/api/user/data', authMiddleware, (req, res) => {
   db.prepare(
     'INSERT INTO chat_messages (user_id, role, content, action_status) VALUES (?, ?, ?, ?)'
   ).run(userId, 'assistant', WELCOME_MESSAGE, 'none');
-  return res.json(buildSnapshotResponse(req.user));
+  return res.json(await buildSnapshotAfterWrite(req.user));
 });
 
 // --- INICIALIZAÇÃO SERVIDOR EXPRESS + VITE ---
