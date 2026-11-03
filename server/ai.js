@@ -364,13 +364,19 @@ function localSmartInterpreter({ message, todayISO, categories, accounts, financ
 
   // 5. Criação ou continuação de lançamento
   // Se o usuário iniciou uma nova frase explícita ("gastei...", "comprei...", "paguei...", "recebi..."), ignora rascunho anterior abandonado
-  const startsNewTransaction = /\b(gastei|paguei|comprei|recebi|ganhei|fiz\s+um\s+extra|entrou|caiu)\b/i.test(lower);
+  const startsNewTransaction = /\b(gastei|paguei|comprei|recebi|ganhei|fiz\s+um\s+extra|entrou|caiu|adicionei|adicionar|coloquei|colocar|botei)\b/i.test(lower);
   const activeDraft = startsNewTransaction ? null : partialDraft;
 
-  const isIncome = /\b(recebi|ganhei|sal[aá]rio|freela|freelance|rendeu|dividendo|reembolso|entrou|depositaram|fiz\s+um\s+extra|renda\s+extra|bico|caiu\s+na\s+conta|depositei|coloquei\s+na\s+conta)\b/i.test(lower);
+  const isExpenseKeyword = /\b(gastei|paguei|comprei|despesa|boleto|fatura)\b/i.test(lower);
+  const isIncome =
+    activeDraft?.type === 'income' ||
+    (!isExpenseKeyword &&
+      /\b(recebi|ganhei|sal[aá]rio|freela|freelance|rendeu|dividendo|reembolso|entrou|depositaram|fiz\s+um\s+extra|renda\s+extra|bico|caiu|depositei|coloquei|colocar|adicionei|adicionar|adiciona|botei|botar|somar|acrescentar|acrescentei|saldo|vendi)\b/i.test(
+        lower
+      ));
   const amount = parseAmountPT(message) ?? activeDraft?.amount ?? null;
   const inferred = inferCategoryAndDesc(message, categories);
-  const category = inferred.category || activeDraft?.category || null;
+  const category = inferred.category || activeDraft?.category || (isIncome ? 'Outros' : null);
   const date = parseRelativeDatePT(message, todayISO) || activeDraft?.date || todayISO;
 
   let paymentMethod = activeDraft?.payment_method || 'Débito';
@@ -423,10 +429,10 @@ function localSmartInterpreter({ message, todayISO, categories, accounts, financ
   };
 
   // Se não parece nem comando nem lançamento
-  if (!amount && !category && !/\b(gastei|paguei|comprei|recebi|ganhei|conta|almoço|mercado|uber)\b/i.test(lower)) {
+  if (!amount && !category && !isIncome && !/\b(gastei|paguei|comprei|recebi|ganhei|conta|almoço|mercado|uber|saldo|adicion|coloc|bot)\b/i.test(lower)) {
     return {
       intent: 'general_chat',
-      reply: 'Posso registrar seus gastos e receitas ou responder dúvidas sobre seu mês! Experimente dizer algo como *"Gastei 45 reais no mercado hoje"* ou *"Quanto gastei esse mês com Alimentação?"*.',
+      reply: 'Posso adicionar saldo, registrar seus gastos e receitas ou responder dúvidas sobre seu mês! Experimente dizer *"Adicionei 2.000 de saldo"*, *"Gastei 45 reais no mercado hoje"* ou *"Qual é o meu saldo?"*.',
       missing_field: 'none',
       transaction: null,
     };
@@ -436,7 +442,9 @@ function localSmartInterpreter({ message, todayISO, categories, accounts, financ
   if (!amount) {
     return {
       intent: 'ask_missing_info',
-      reply: `Qual foi o valor desse lançamento${category ? ` em **${category}**` : ''}?`,
+      reply: isIncome
+        ? 'Qual valor você quer adicionar ao seu saldo / registrar como entrada? 💰'
+        : `Qual foi o valor desse gasto${category ? ` em **${category}**` : ''}?`,
       missing_field: 'amount',
       transaction: draftTx,
     };
@@ -445,19 +453,30 @@ function localSmartInterpreter({ message, todayISO, categories, accounts, financ
   if (!category) {
     return {
       intent: 'ask_missing_info',
-      reply: `Em qual categoria você quer classificar esse valor de **${formatBRL(amount)}**? (ex.: Alimentação, Moradia, Transporte, Lazer, Saúde)`,
+      reply: `Em qual categoria você quer classificar esse gasto de **${formatBRL(amount)}**? (ex.: Alimentação, Moradia, Transporte, Lazer, Saúde)`,
       missing_field: 'category',
       transaction: draftTx,
     };
   }
 
-  const labelType = draftTx.type === 'income' ? 'Receita' : 'Despesa';
+  const labelType = draftTx.type === 'income' ? 'Entrada / Adição de Saldo' : 'Despesa';
   const parcelText = draftTx.installments > 1 ? ` (${draftTx.installments}x de ${formatBRL(draftTx.amount / draftTx.installments)})` : '';
   const recText = draftTx.is_recurring ? ', recorrente' : '';
+  const currentBal = Number(
+    financialSummary.currentTotalBalance ??
+      Number(financialSummary.initialBalance || 0) +
+        Number(financialSummary.totalIncome || 0) -
+        Number(financialSummary.totalExpense || 0)
+  );
+  const projectedBal =
+    draftTx.type === 'income' ? currentBal + Number(draftTx.amount) : currentBal - Number(draftTx.amount);
+  const balancePreviewLine = `\n💰 *Saldo após confirmar: ${formatBRL(currentBal)} ${
+    draftTx.type === 'income' ? '+' : '-'
+  } ${formatBRL(draftTx.amount)} = **${formatBRL(projectedBal)}***`;
 
   return {
     intent: 'confirm_transaction',
-    reply: `${labelType} de **${formatBRL(draftTx.amount)}**${parcelText} em **${draftTx.category}** (${draftTx.description}), dia **${formatBRDate(draftTx.date)}**, no **${draftTx.payment_method}** (${draftTx.account_name}${recText}). Confirmar?`,
+    reply: `${labelType} de **${formatBRL(draftTx.amount)}**${parcelText} em **${draftTx.category}** (${draftTx.description}), dia **${formatBRDate(draftTx.date)}**, no **${draftTx.payment_method}** (${draftTx.account_name}${recText}).${balancePreviewLine}\nConfirmar?`,
     missing_field: 'none',
     transaction: draftTx,
   };
