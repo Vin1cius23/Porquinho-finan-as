@@ -278,34 +278,74 @@ app.post('/api/chat/message', authMiddleware, async (req, res) => {
       'INSERT INTO chat_messages (user_id, role, content, action_status) VALUES (?, ?, ?, ?)'
     ).run(userId, 'user', text, 'none');
 
-    // Comando direto no chat para definir/atualizar o saldo base da conta ("meu saldo é 2000", "coloquei um saldo de 2000", "tenho 2000 de saldo")
-    if (
-      /\b(meu\s+saldo(\s+[eé])?|saldo\s+inicial|coloquei\s+(?:um\s+)?saldo|tenho\s+.*de\s+saldo|definir\s+saldo|ajustar\s+saldo|mudar\s+saldo)\b/i.test(
+    const ctxBefore = buildFinancialContext(userId, month);
+
+    // 1) Detecta intenção de ADICIONAR SALDO (soma ao saldo atual) ou DEFINIR SALDO BASE no chat
+    const isAnsweringAddBalance =
+      partialDraft?.draftIntent === 'add_balance' &&
+      !/\b(gastei|paguei|comprei|apague|exclu)\b/i.test(text);
+
+    const isAddBalancePhrase =
+      !/^(quanto|qual|mostre|onde|estou)/i.test(text.trim()) &&
+      /\b(adicion(ar|ei|e|a)\s+.*saldo|saldo.*adicion(ar|ei|e|a)|coloquei\s+.*(saldo|na\s+conta)|colocar\s+.*(saldo|na\s+conta)|botei\s+.*(saldo|na\s+conta)|botar\s+.*(saldo|na\s+conta)|mais\s+.*de\s+saldo|somar\s+.*saldo|acrescent(ar|ei)\s+.*saldo|aumentar\s+.*saldo|quero\s+(adicionar|colocar|botar)\s+saldo|adicionar\s+saldo|colocar\s+saldo)\b/i.test(
         text
-      )
-    ) {
+      );
+
+    const isSetBaseBalancePhrase =
+      !/^(quanto|qual|mostre|onde|estou)/i.test(text.trim()) &&
+      /\b(meu\s+saldo(\s+inicial|\s+atual|\s+total)?(\s+[eé])?|saldo\s+inicial(\s+[eé])?|tenho\s+.*de\s+saldo|definir\s+saldo|ajustar\s+saldo|mudar\s+saldo)\b/i.test(
+        text
+      );
+
+    if (isAnsweringAddBalance || isAddBalancePhrase || isSetBaseBalancePhrase) {
       const parsedBal = parseAmountPT(text);
-      if (parsedBal !== null) {
-        const mainAcc = db
-          .prepare("SELECT id, name FROM accounts WHERE user_id = ? AND type != 'credit_card' ORDER BY id ASC LIMIT 1")
-          .get(userId);
-        if (mainAcc) {
-          db.prepare('UPDATE accounts SET initial_balance = ? WHERE id = ?').run(parsedBal, mainAcc.id);
-        } else {
-          db.prepare(
-            'INSERT INTO accounts (user_id, name, type, initial_balance, credit_limit) VALUES (?, ?, ?, ?, 0)'
-          ).run(userId, 'Conta Corrente Principal', 'checking', parsedBal);
-        }
-        const updatedCtx = buildFinancialContext(userId, month);
-        const balReply = `✅ Atualizei o saldo base da sua conta para **${formatBRL(parsedBal)}**! Descontando suas saídas e somando suas entradas, seu **Saldo Disponível Atual** é de **${formatBRL(updatedCtx.currentTotalBalance)}**.`;
+      if (parsedBal === null) {
+        // O usuário disse "quero adicionar saldo" sem informar o valor ainda: pergunta o valor!
+        const draftPayload = JSON.stringify({
+          _isPartialDraft: true,
+          draftIntent: 'add_balance',
+          missing_field: 'amount',
+          type: 'income',
+          category: 'Outros',
+          description: 'Adição de Saldo',
+        });
+        const askReply =
+          'Claro! Qual valor você quer **adicionar ao seu saldo**? 💰 (Ex.: digite *500* ou *2.000*, ou toque em um dos valores abaixo)';
         db.prepare(
-          'INSERT INTO chat_messages (user_id, role, content, action_status) VALUES (?, ?, ?, ?)'
-        ).run(userId, 'assistant', balReply, 'none');
+          'INSERT INTO chat_messages (user_id, role, content, pending_action_json, action_status) VALUES (?, ?, ?, ?, ?)'
+        ).run(userId, 'assistant', askReply, draftPayload, 'none');
         return res.json(await buildSnapshotAfterWrite(req.user, month));
       }
+
+      const mainAcc = db
+        .prepare("SELECT id, name, initial_balance FROM accounts WHERE user_id = ? AND type != 'credit_card' ORDER BY id ASC LIMIT 1")
+        .get(userId);
+
+      // Se o usuário pediu para ADICIONAR saldo (ou se tinha saldo 0), soma ao saldo base; se pediu para DEFINIR saldo inicial, define o valor
+      const prevInit = Number(mainAcc?.initial_balance || 0);
+      const isAdditive = isAnsweringAddBalance || isAddBalancePhrase;
+      const nextInit = isAdditive ? prevInit + parsedBal : parsedBal;
+
+      if (mainAcc) {
+        db.prepare('UPDATE accounts SET initial_balance = ? WHERE id = ?').run(nextInit, mainAcc.id);
+      } else {
+        db.prepare(
+          'INSERT INTO accounts (user_id, name, type, initial_balance, credit_limit) VALUES (?, ?, ?, ?, 0)'
+        ).run(userId, 'Conta Corrente Principal', 'checking', nextInit);
+      }
+
+      const updatedCtx = buildFinancialContext(userId, month);
+      const balReply = isAdditive
+        ? `✅ Adicionei **+ ${formatBRL(parsedBal)}** ao seu saldo!\n💰 **Cálculo do Saldo:** ${formatBRL(ctxBefore.currentTotalBalance)} + ${formatBRL(parsedBal)} = **${formatBRL(updatedCtx.currentTotalBalance)} disponível**`
+        : `✅ Saldo base definido para **${formatBRL(parsedBal)}**!\n💰 **Saldo Disponível Atual** (descontando seus gastos de ${formatBRL(updatedCtx.totalExpense)}): **${formatBRL(updatedCtx.currentTotalBalance)}**`;
+
+      db.prepare(
+        'INSERT INTO chat_messages (user_id, role, content, action_status) VALUES (?, ?, ?, ?)'
+      ).run(userId, 'assistant', balReply, 'none');
+      return res.json(await buildSnapshotAfterWrite(req.user, month));
     }
 
-    const ctx = buildFinancialContext(userId, month);
+    const ctx = ctxBefore;
     const aiResult = await interpretUserMessage({
       message: text,
       categories: ctx.categories.map((c) => c.name),
@@ -403,6 +443,7 @@ app.post('/api/chat/action', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Valor inválido.' });
     }
 
+    const ctxBeforeAction = buildFinancialContext(userId, month);
     const insertStmt = db.prepare(`
       INSERT INTO transactions (
         user_id, date, description, category, type, amount, payment_method, account_name, is_recurring, installment_info, notes, status
@@ -452,9 +493,12 @@ app.post('/api/chat/action', authMiddleware, async (req, res) => {
       }
     }
 
+    const opSign = txData.type === 'income' ? '+' : '-';
+    const balanceMathLine = `\n💰 **Saldo Atualizado:** ${formatBRL(ctxBeforeAction.currentTotalBalance)} ${opSign} ${formatBRL(baseAmount)} = **${formatBRL(ctxAfter.currentTotalBalance)} disponível**`;
+
     const confirmReply = totalInstallments > 1
-      ? `✅ Salvo na planilha! Registrei **${totalInstallments} parcelas de ${formatBRL(perInstallmentAmount)}** em **${txData.category}**.${budgetTip}`
-      : `✅ Lançamento de **${formatBRL(baseAmount)}** em **${txData.category}** salvo na planilha!${budgetTip}`;
+      ? `✅ Salvo na planilha! Registrei **${totalInstallments} parcelas de ${formatBRL(perInstallmentAmount)}** em **${txData.category}**.${balanceMathLine}${budgetTip}`
+      : `✅ ${txData.type === 'income' ? 'Entrada' : 'Despesa'} de **${formatBRL(baseAmount)}** em **${txData.category}** salva na planilha!${balanceMathLine}${budgetTip}`;
 
     db.prepare(
       'INSERT INTO chat_messages (user_id, role, content, action_status) VALUES (?, ?, ?, ?)'
