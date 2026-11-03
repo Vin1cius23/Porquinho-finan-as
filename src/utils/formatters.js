@@ -1,5 +1,18 @@
 import * as XLSX from 'xlsx';
 
+export function getTodayISO() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+export function getCurrentMonthISO() {
+  return getTodayISO().slice(0, 7);
+}
+
 export function formatCurrency(value) {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
