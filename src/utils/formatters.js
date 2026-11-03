@@ -20,6 +20,31 @@ export function formatCurrency(value) {
   }).format(Number(value || 0));
 }
 
+/**
+ * Converte entradas monetárias brasileiras ("2.000", "2.500,50", "2000,50", "2000") para número real
+ */
+export function parseMoneyInputBR(rawVal) {
+  if (typeof rawVal === 'number') return isNaN(rawVal) ? 0 : rawVal;
+  let str = String(rawVal || '')
+    .replace(/[R$\s]/gi, '')
+    .trim();
+  if (!str) return 0;
+
+  if (str.includes('.') && str.includes(',')) {
+    str = str.replace(/\./g, '').replace(',', '.');
+  } else if (str.includes('.')) {
+    // Se tiver 3 dígitos após o ponto (ex: "2.000" ou "15.500"), é separador de milhar
+    if (/^-?\d{1,3}(\.\d{3})+$/.test(str)) {
+      str = str.replace(/\./g, '');
+    }
+  } else if (str.includes(',')) {
+    str = str.replace(',', '.');
+  }
+
+  const num = parseFloat(str);
+  return isNaN(num) ? 0 : num;
+}
+
 export function formatDateBR(isoDate) {
   if (!isoDate) return '';
   const clean = String(isoDate).slice(0, 10);
