@@ -665,12 +665,19 @@ async function startServer() {
     });
   }
 
-  app.listen(port, () => {
+  const server = app.listen(port, () => {
     console.log(`🚀 FinChat IA rodando em http://localhost:${port}`);
+  });
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`⚠️ Porta ${port} já está em uso por outra instância do FinChat IA.`);
+    } else {
+      console.error('Erro no servidor:', err);
+    }
   });
 }
 
-if (!process.env.VERCEL) {
+if (!process.env.VERCEL && !process.env.FINCHAT_TEST_MODE) {
   startServer();
 }
 
