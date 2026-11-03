@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node --no-warnings server/index.js",
     "build": "vite build",
-    "start": "NODE_ENV=production node --no-warnings server/index.js"
+    "start": "NODE_ENV=production node --no-warnings server/index.js",
+    "sync": "node scripts/auto-git-sync.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

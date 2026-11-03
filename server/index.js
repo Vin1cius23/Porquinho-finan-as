@@ -608,6 +608,10 @@ async function startServer() {
       appType: 'spa',
     });
     app.use(vite.middlewares);
+
+    // Ativa sincronização automática com o GitHub sempre que arquivos forem alterados
+    const { startGitAutoWatcher } = await import('../scripts/auto-git-sync.js');
+    startGitAutoWatcher();
   } else {
     const distPath = path.resolve(process.cwd(), 'dist');
     app.use(express.static(distPath));
