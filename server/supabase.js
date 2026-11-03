@@ -175,6 +175,21 @@ export async function syncAllLocalToSupabase() {
           }))
         );
       }
+
+      // 6. Sincroniza Histórico do Chat
+      const localMsgs = db.prepare('SELECT * FROM chat_messages WHERE user_id = ? ORDER BY id ASC').all(u.id);
+      await supabaseClient.from('chat_messages').delete().eq('user_id', remoteUserId);
+      if (localMsgs.length > 0) {
+        await supabaseClient.from('chat_messages').insert(
+          localMsgs.map((m) => ({
+            user_id: remoteUserId,
+            role: m.role,
+            content: m.content,
+            pending_action_json: m.pending_action_json ? JSON.parse(m.pending_action_json) : null,
+            action_status: m.action_status || 'none',
+          }))
+        );
+      }
     }
 
     lastSyncStatus = {
@@ -202,3 +217,4 @@ export function triggerBackgroundSupabaseSync() {
     console.warn('[Supabase Sync] Aviso:', err.message);
   });
 }
+
