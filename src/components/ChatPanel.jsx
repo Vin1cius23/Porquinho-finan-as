@@ -56,7 +56,9 @@ function detectLivePreview(text) {
   if (milMatch) {
     amount = parseFloat(milMatch[1].replace(',', '.')) * 1000;
   } else {
-    const cleanForMoney = lower.replace(/\b\d+\s*x\b/g, '').replace(/\bdia\s+\d+\b/g, '');
+    const cleanForMoney = lower
+      .replace(/\b(\d+)\s*(?:x|vezes|parcelas?)\b/gi, '')
+      .replace(/\bdia\s+\d+\b/g, '');
     const m = cleanForMoney.match(/(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:,\d{1,2})?)/i);
     if (m) {
       let raw = m[1];
@@ -67,19 +69,24 @@ function detectLivePreview(text) {
     }
   }
 
+  const hasWord = (str, word) => {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(?:^|[\\s.,!?;:()/"'])${escaped}(?=$|[\\s.,!?;:()/"'])`, 'i').test(str);
+  };
+
   let category = null;
   const map = [
-    ['Alimentação', ['mercado', 'ifood', 'padaria', 'restaurante', 'almoço', 'almoco', 'lanche', 'pizza', 'café', 'feira']],
-    ['Transporte', ['uber', '99', 'gasolina', 'combustível', 'ônibus', 'metrô', 'estacionamento', 'pedágio']],
-    ['Moradia', ['aluguel', 'condomínio', 'luz', 'energia', 'enel', 'água', 'internet', 'gás', 'iptu']],
-    ['Saúde', ['farmácia', 'remédio', 'médico', 'consulta', 'exame', 'academia', 'dentista']],
-    ['Lazer', ['cinema', 'show', 'bar', 'viagem', 'passeio', 'jogo', 'shopping', 'fone', 'roupa']],
+    ['Alimentação', ['mercado', 'supermercado', 'ifood', 'padaria', 'restaurante', 'almoço', 'almoco', 'lanche', 'pizza', 'café', 'cafe', 'feira']],
+    ['Transporte', ['uber', '99', 'gasolina', 'combustível', 'combustivel', 'ônibus', 'onibus', 'metrô', 'metro', 'estacionamento', 'pedágio']],
+    ['Moradia', ['aluguel', 'condomínio', 'condominio', 'luz', 'energia', 'enel', 'água', 'agua', 'internet', 'gás', 'gas', 'iptu', 'geladeira', 'fogão', 'sofá']],
+    ['Saúde', ['farmácia', 'farmacia', 'remédio', 'remedio', 'médico', 'medico', 'consulta', 'exame', 'academia', 'dentista']],
+    ['Lazer', ['cinema', 'show', 'bar', 'viagem', 'passeio', 'jogo', 'shopping', 'fone', 'roupa', 'notebook', 'celular', 'computador', 'tv', 'tênis', 'tenis']],
     ['Assinaturas', ['netflix', 'spotify', 'prime', 'disney', 'youtube', 'icloud', 'assinatura']],
-    ['Educação', ['curso', 'faculdade', 'livro', 'escola', 'inglês']],
+    ['Educação', ['curso', 'faculdade', 'livro', 'escola', 'inglês', 'ingles']],
     ['Investimentos', ['tesouro', 'cdb', 'fii', 'ação', 'reserva', 'investimento']],
   ];
   for (const [cat, kws] of map) {
-    if (kws.some((k) => lower.includes(k))) {
+    if (kws.some((k) => hasWord(lower, k))) {
       category = cat;
       break;
     }

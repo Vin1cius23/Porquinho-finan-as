@@ -234,9 +234,14 @@ function inferCategoryAndDesc(text, availableCategories) {
     { category: 'Investimentos', keywords: ['tesouro', 'cdb', 'ação', 'acoes', 'fii', 'bitcoin', 'cripto', 'poupança', 'poupanca', 'investimento', 'aporte', 'reserva'] },
   ];
 
+  const hasWholeWord = (str, word) => {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(?:^|[\\s.,!?;:()/"'])${escaped}(?=$|[\\s.,!?;:()/"'])`, 'i').test(str);
+  };
+
   for (const rule of rules) {
     for (const kw of rule.keywords) {
-      if (lower.includes(kw)) {
+      if (hasWholeWord(lower, kw)) {
         const matchedCat = availableCategories.find((c) => c.toLowerCase() === rule.category.toLowerCase()) || rule.category;
         const cleanDesc = kw.charAt(0).toUpperCase() + kw.slice(1);
         return { category: matchedCat, keywordDesc: cleanDesc };
@@ -246,7 +251,7 @@ function inferCategoryAndDesc(text, availableCategories) {
 
   // Verifica se o próprio nome de uma categoria cadastrada pelo usuário está na mensagem
   for (const cat of availableCategories) {
-    if (lower.includes(cat.toLowerCase())) {
+    if (hasWholeWord(lower, cat.toLowerCase())) {
       return { category: cat, keywordDesc: cat };
     }
   }
