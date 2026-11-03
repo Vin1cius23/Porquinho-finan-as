@@ -131,6 +131,17 @@ export function seedUserDefaults(userId, selectedCategories = null, initialBalan
     insertAcc.run(userId, mainAccountName, 'checking', Number(initialBalance) || 0, 0, null, null);
     insertAcc.run(userId, 'Cartão Principal', 'credit_card', 0, 4500, 3, 10);
     insertAcc.run(userId, 'Carteira Física', 'wallet', 0, 0, null, null);
+  } else if (initialBalance !== undefined && initialBalance !== null) {
+    const mainAcc = db
+      .prepare("SELECT id FROM accounts WHERE user_id = ? AND type != 'credit_card' ORDER BY id ASC LIMIT 1")
+      .get(userId);
+    if (mainAcc) {
+      db.prepare('UPDATE accounts SET name = ?, initial_balance = ? WHERE id = ?').run(
+        mainAccountName || 'Conta Corrente Principal',
+        Number(initialBalance) || 0,
+        mainAcc.id
+      );
+    }
   }
 
   const existingMsgs = db.prepare('SELECT COUNT(*) as count FROM chat_messages WHERE user_id = ?').get(userId);
