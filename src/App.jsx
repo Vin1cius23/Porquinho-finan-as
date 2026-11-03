@@ -17,6 +17,7 @@ import {
   Wifi,
   BatteryCharging,
   Download,
+  Edit3,
   X,
 } from 'lucide-react';
 import AuthModal from './components/AuthModal.jsx';
@@ -24,7 +25,7 @@ import ChatPanel from './components/ChatPanel.jsx';
 import SpreadsheetView from './components/SpreadsheetView.jsx';
 import MonthlySummary from './components/MonthlySummary.jsx';
 import AccountsManager from './components/AccountsManager.jsx';
-import { formatCurrency, getCurrentMonthISO, getTodayISO } from './utils/formatters.js';
+import { formatCurrency, getCurrentMonthISO, getTodayISO, parseMoneyInputBR } from './utils/formatters.js';
 
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem('finchat_token') || '');
@@ -55,6 +56,8 @@ export default function App() {
   const [deferredPwaPrompt, setDeferredPwaPrompt] = useState(null);
   const [isStandalonePwa, setIsStandalonePwa] = useState(false);
   const [showPwaInstallModal, setShowPwaInstallModal] = useState(false);
+  const [showBalanceModal, setShowBalanceModal] = useState(false);
+  const [balanceInputVal, setBalanceInputVal] = useState('');
 
   useEffect(() => {
     const standalone =
@@ -107,6 +110,10 @@ export default function App() {
 
   function applySnapshot(data) {
     if (!data) return;
+    if (data.token) {
+      localStorage.setItem('finchat_token', data.token);
+      setToken(data.token);
+    }
     if (data.user) setUser(data.user);
     if (data.messages) setMessages(data.messages);
     if (data.transactions) setTransactions(data.transactions);
@@ -362,6 +369,39 @@ export default function App() {
     if (res.ok) applySnapshot(await res.json());
   }
 
+  async function handleUpdateAccount(id, fields) {
+    const res = await fetch(`/api/accounts/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(fields),
+    });
+    if (res.ok) {
+      applySnapshot(await res.json());
+      showToast('Saldo da conta atualizado!');
+    }
+  }
+
+  async function handleSaveQuickBalance(e) {
+    e.preventDefault();
+    const newBal = parseMoneyInputBR(balanceInputVal);
+    const res = await fetch('/api/accounts/balance', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ initial_balance: newBal }),
+    });
+    if (res.ok) {
+      applySnapshot(await res.json());
+      setShowBalanceModal(false);
+      showToast(`✅ Saldo base atualizado para ${formatCurrency(newBal)}!`);
+    }
+  }
+
   async function handleAddGoal(goal) {
     const res = await fetch('/api/goals', {
       method: 'POST',
@@ -426,7 +466,11 @@ export default function App() {
         user={user}
         token={token}
         onAuthSuccess={handleAuthSuccess}
-        onOnboardingComplete={(updatedUser) => {
+        onOnboardingComplete={(updatedUser, newToken) => {
+          if (newToken) {
+            localStorage.setItem('finchat_token', newToken);
+            setToken(newToken);
+          }
           setUser(updatedUser);
           fetchBootstrap();
         }}
@@ -488,11 +532,22 @@ export default function App() {
                   </button>
                 </div>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="text-base sm:text-lg font-extrabold tracking-tight whitespace-nowrap">
-                    {hideBalance
-                      ? 'R$ ••••••'
-                      : formatCurrency(summary?.currentTotalBalance || 0)}
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBalanceInputVal(String(summary?.initialBalance || 0));
+                      setShowBalanceModal(true);
+                    }}
+                    className="flex items-center gap-1 text-base sm:text-lg font-extrabold tracking-tight whitespace-nowrap hover:opacity-90 cursor-pointer"
+                    title="Toque para ajustar seu saldo inicial/base"
+                  >
+                    <span>
+                      {hideBalance
+                        ? 'R$ ••••••'
+                        : formatCurrency(summary?.currentTotalBalance || 0)}
+                    </span>
+                    <Edit3 className="w-3.5 h-3.5 text-emerald-200 shrink-0" />
+                  </button>
                   <button
                     type="button"
                     onClick={() => setHideBalance((v) => !v)}
@@ -549,12 +604,20 @@ export default function App() {
               <div className="mt-2.5 grid grid-cols-2 gap-2 text-[11px]">
                 <button
                   type="button"
-                  onClick={() => setMobileTab('summary')}
+                  onClick={() => {
+                    setBalanceInputVal(String(summary?.initialBalance || 0));
+                    setShowBalanceModal(true);
+                  }}
                   className="px-3 py-1.5 rounded-xl bg-white/12 hover:bg-white/20 flex items-center justify-between transition cursor-pointer"
+                  title="Toque para definir ou ajustar seu saldo inicial"
                 >
-                  <span className="text-emerald-100">Entradas</span>
+                  <span className="text-emerald-100">
+                    {(summary.initialBalance || 0) > 0 ? 'Saldo + Entradas' : 'Entradas'}
+                  </span>
                   <strong className="text-white">
-                    {hideBalance ? '••••' : formatCurrency(summary.totalIncome)}
+                    {hideBalance
+                      ? '••••'
+                      : formatCurrency((summary.initialBalance || 0) + (summary.totalIncome || 0))}
                   </strong>
                 </button>
                 <button
@@ -570,6 +633,56 @@ export default function App() {
               </div>
             )}
           </header>
+
+          {/* Modal Rápido para Ajustar Saldo Inicial / Base da Conta */}
+          {showBalanceModal && (
+            <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-pop-in">
+              <form
+                onSubmit={handleSaveQuickBalance}
+                className="w-full bg-white dark:bg-slate-900 rounded-3xl p-5 space-y-3.5 border border-slate-200 dark:border-slate-800 shadow-2xl"
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                    Ajustar Saldo Inicial em Conta (R$)
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowBalanceModal(false)}
+                    className="p-1 rounded-full bg-slate-100 dark:bg-slate-800 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Informe o valor total que você tinha em conta antes dos gastos. Todos os gastos registrados serão descontados automaticamente deste valor:
+                </p>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  autoFocus
+                  placeholder="Ex: 2500 ou 2.500,00"
+                  value={balanceInputVal}
+                  onChange={(e) => setBalanceInputVal(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-base font-bold outline-none focus:border-emerald-500"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowBalanceModal(false)}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold text-xs cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs cursor-pointer"
+                  >
+                    Salvar Saldo
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
 
           {/* Toast flutuante interno do App Mobile */}
           {toast && (
@@ -686,6 +799,7 @@ export default function App() {
                 transactions={transactions}
                 goals={goals}
                 onAddAccount={handleAddAccount}
+                onUpdateAccount={handleUpdateAccount}
                 onDeleteAccount={handleDeleteAccount}
                 onUpdateTransaction={handleUpdateTransaction}
                 onAddGoal={handleAddGoal}
@@ -911,6 +1025,7 @@ export default function App() {
             transactions={transactions}
             goals={goals}
             onAddAccount={handleAddAccount}
+            onUpdateAccount={handleUpdateAccount}
             onDeleteAccount={handleDeleteAccount}
             onUpdateTransaction={handleUpdateTransaction}
             onAddGoal={handleAddGoal}
