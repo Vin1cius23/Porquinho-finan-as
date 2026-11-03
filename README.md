@@ -1,6 +1,9 @@
 # FinChat IA — Controle Financeiro Pessoal por Conversa
 
-Aplicativo web full-stack de controle financeiro pessoal em português do Brasil, onde o usuário conversa em linguagem natural com uma IA (estilo WhatsApp) e o sistema registra, categoriza e organiza tudo automaticamente em uma planilha interativa em tempo real.
+🌐 **App Online (Produção Vercel):** [https://porquinho-financ-as.vercel.app/](https://porquinho-financ-as.vercel.app/)
+📦 **Repositório GitHub:** [https://github.com/Vin1cius23/Porquinho-finan-as](https://github.com/Vin1cius23/Porquinho-finan-as)
+
+Aplicativo web e mobile (PWA) full-stack de controle financeiro pessoal em português do Brasil, onde o usuário conversa em linguagem natural com uma IA (estilo WhatsApp) e o sistema registra, categoriza e organiza tudo automaticamente em uma planilha interativa em tempo real sincronizada com o **Supabase**.
 
 ## Como rodar localmente
 

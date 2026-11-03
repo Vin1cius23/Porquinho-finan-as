@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { db, seedUserDefaults } from './db.js';
+import { syncAllLocalToSupabase, triggerBackgroundSupabaseSync } from './supabase.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'finchat-dev-secret-key-2026';
 
@@ -31,7 +32,7 @@ export function authMiddleware(req, res, next) {
   }
 }
 
-export function registerHandler(req, res) {
+export async function registerHandler(req, res) {
   try {
     const { name, email, password } = req.body;
     if (!name || !email || !password || password.length < 6) {
@@ -50,6 +51,13 @@ export function registerHandler(req, res) {
     const userId = Number(result.lastInsertRowid);
     const user = { id: userId, name: String(name).trim(), email: cleanEmail, onboarded: 0 };
     const token = signToken(user);
+
+    if (process.env.VERCEL) {
+      await syncAllLocalToSupabase();
+    } else {
+      triggerBackgroundSupabaseSync();
+    }
+
     return res.status(201).json({ token, user });
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao criar conta: ' + err.message });
@@ -72,7 +80,7 @@ export function loginHandler(req, res) {
   }
 }
 
-export function onboardingHandler(req, res) {
+export async function onboardingHandler(req, res) {
   try {
     const { accountName, initialBalance, categories } = req.body;
     seedUserDefaults(
@@ -83,6 +91,13 @@ export function onboardingHandler(req, res) {
     );
     db.prepare('UPDATE users SET onboarded = 1 WHERE id = ?').run(req.user.id);
     const updatedUser = db.prepare('SELECT id, name, email, onboarded FROM users WHERE id = ?').get(req.user.id);
+
+    if (process.env.VERCEL) {
+      await syncAllLocalToSupabase();
+    } else {
+      triggerBackgroundSupabaseSync();
+    }
+
     return res.json({ user: updatedUser });
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao concluir onboarding: ' + err.message });
