@@ -11,6 +11,7 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
+import { parseMoneyInputBR } from '../utils/formatters.js';
 
 const STANDARD_CATEGORIES = [
   'Moradia',
@@ -102,13 +103,13 @@ export default function AuthModal({ user, token, onAuthSuccess, onOnboardingComp
         },
         body: JSON.stringify({
           accountName,
-          initialBalance: parseFloat(String(initialBalance).replace(',', '.')) || 0,
+          initialBalance: parseMoneyInputBR(initialBalance),
           categories: selectedCategories,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro no onboarding');
-      onOnboardingComplete(data.user);
+      onOnboardingComplete(data.user, data.token);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -317,8 +318,9 @@ export default function AuthModal({ user, token, onAuthSuccess, onOnboardingComp
                   Saldo Atual em Conta (R$)
                 </label>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Ex: 2500 ou 2.500,00"
                   value={initialBalance}
                   onChange={(e) => setInitialBalance(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-bold"
