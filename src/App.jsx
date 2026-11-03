@@ -17,6 +17,7 @@ import {
   Wifi,
   BatteryCharging,
   Cloud,
+  Download,
   X,
 } from 'lucide-react';
 import AuthModal from './components/AuthModal.jsx';
@@ -59,6 +60,53 @@ export default function App() {
   const [showSupabaseModal, setShowSupabaseModal] = useState(false);
   const [supabaseKeyInput, setSupabaseKeyInput] = useState('');
   const [supabaseConnecting, setSupabaseConnecting] = useState(false);
+
+  // Estados de instalação do PWA (Progressive Web App)
+  const [deferredPwaPrompt, setDeferredPwaPrompt] = useState(null);
+  const [isStandalonePwa, setIsStandalonePwa] = useState(false);
+  const [showPwaInstallModal, setShowPwaInstallModal] = useState(false);
+
+  useEffect(() => {
+    const standalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true;
+    setIsStandalonePwa(standalone);
+
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    if (tabParam && ['chat', 'sheet', 'summary', 'accounts'].includes(tabParam)) {
+      setMobileTab(tabParam);
+    }
+
+    function onBeforeInstallPrompt(e) {
+      e.preventDefault();
+      setDeferredPwaPrompt(e);
+    }
+    function onAppInstalled() {
+      setDeferredPwaPrompt(null);
+      setIsStandalonePwa(true);
+      showToast('🎉 App instalado com sucesso no seu aparelho!');
+    }
+
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+    window.addEventListener('appinstalled', onAppInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', onAppInstalled);
+    };
+  }, []);
+
+  async function handleInstallPwaClick() {
+    if (deferredPwaPrompt) {
+      deferredPwaPrompt.prompt();
+      const { outcome } = await deferredPwaPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPwaPrompt(null);
+      }
+    } else {
+      setShowPwaInstallModal(true);
+    }
+  }
 
   function showToast(text) {
     setToast(text);
@@ -447,15 +495,17 @@ export default function App() {
 
         {/* Moldura do Smartphone (100% da tela em celulares reais, 430x860 no desktop) */}
         <div className="w-full sm:w-[430px] h-screen sm:h-[860px] bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 sm:rounded-[44px] sm:border-[10px] sm:border-slate-800 sm:shadow-[0_25px_70px_-15px_rgba(0,0,0,0.75)] flex flex-col overflow-hidden relative">
-          {/* Status Bar Nativa do Celular */}
-          <div className="bg-emerald-800 dark:bg-slate-900 text-white px-6 pt-2 pb-1 flex items-center justify-between text-[11px] font-semibold shrink-0">
-            <span>09:41</span>
-            <div className="hidden sm:block w-24 h-4 rounded-full bg-black/50" />
-            <div className="flex items-center gap-1.5">
-              <Wifi className="w-3.5 h-3.5" />
-              <BatteryCharging className="w-4 h-4" />
+          {/* Status Bar Nativa do Celular (oculta quando já instalado como PWA standalone) */}
+          {!isStandalonePwa && (
+            <div className="bg-emerald-800 dark:bg-slate-900 text-white px-6 pt-2 pb-1 flex items-center justify-between text-[11px] font-semibold shrink-0">
+              <span>09:41</span>
+              <div className="hidden sm:block w-24 h-4 rounded-full bg-black/50" />
+              <div className="flex items-center gap-1.5">
+                <Wifi className="w-3.5 h-3.5" />
+                <BatteryCharging className="w-4 h-4" />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* App Header Mobile com Saldo (estilo Nubank/Inter) e botão de ocultar saldo */}
           <header className="bg-emerald-700 dark:bg-slate-900 text-white px-4 pt-2 pb-3 border-b border-emerald-600/30 dark:border-slate-800 shrink-0">
@@ -481,6 +531,17 @@ export default function App() {
 
               {/* Ações rápidas do topo mobile */}
               <div className="flex items-center gap-1">
+                {!isStandalonePwa && (
+                  <button
+                    type="button"
+                    onClick={handleInstallPwaClick}
+                    className="px-2 py-1.5 rounded-full text-[10px] font-bold flex items-center gap-1 bg-white text-emerald-800 hover:bg-emerald-50 shadow-2xs transition cursor-pointer"
+                    title="Instalar Aplicativo (PWA) no celular ou computador"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>Instalar App</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowSupabaseModal(true)}
@@ -553,6 +614,64 @@ export default function App() {
             <div className="absolute top-28 left-4 right-4 z-50 flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-900/95 dark:bg-emerald-600 text-white text-xs font-semibold shadow-lg animate-pop-in">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 dark:text-white shrink-0" />
               <span className="truncate">{toast}</span>
+            </div>
+          )}
+
+          {/* Modal de Instalação do PWA (iOS / Android / Desktop) */}
+          {showPwaInstallModal && (
+            <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-pop-in">
+              <div className="w-full bg-white dark:bg-slate-900 rounded-3xl p-5 space-y-3.5 border border-slate-200 dark:border-slate-800 shadow-2xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="w-5 h-5 text-emerald-500" />
+                    <h3 className="font-bold text-sm">Instalar o App no Celular (PWA)</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPwaInstallModal(false)}
+                    className="p-1 rounded-full bg-slate-100 dark:bg-slate-800 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-2.5 text-xs text-slate-600 dark:text-slate-300">
+                  <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/70 space-y-1">
+                    <p className="font-bold text-emerald-800 dark:text-emerald-300">
+                      🤖 No Android (Chrome / Samsung Internet):
+                    </p>
+                    <p>
+                      Toque nos <strong>3 pontinhos (⋮)</strong> no canto superior do navegador e selecione <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à tela inicial"</strong>.
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-1">
+                    <p className="font-bold text-slate-800 dark:text-slate-100">
+                      🍎 No iPhone / iOS (Safari):
+                    </p>
+                    <p>
+                      Toque no botão <strong>Compartilhar (⬆️)</strong> na barra inferior do Safari e depois em <strong>"Adicionar à Tela de Início"</strong>.
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-1">
+                    <p className="font-bold text-slate-800 dark:text-slate-100">
+                      💻 No Computador (Chrome / Edge):
+                    </p>
+                    <p>
+                      Clique no ícone de <strong>Instalar (📲)</strong> que aparece no lado direito da barra de endereços (`porquinho-financ-as.vercel.app`).
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowPwaInstallModal(false)}
+                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs cursor-pointer"
+                >
+                  Entendi!
+                </button>
+              </div>
             </div>
           )}
 
