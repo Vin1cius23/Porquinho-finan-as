@@ -1,0 +1,11 @@
+{
+  "name": "FinChat IA — Controle Financeiro",
+  "short_name": "FinChat IA",
+  "description": "Seu assistente financeiro pessoal por conversa estilo WhatsApp",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#064e3b",
+  "theme_color": "#059669",
+  "orientation": "portrait"
+}
+

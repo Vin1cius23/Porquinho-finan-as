@@ -1,0 +1,30 @@
+{
+  "name": "finchat-ai",
+  "version": "1.0.0",
+  "description": "Aplicativo web de controle financeiro pessoal baseado em conversa com IA (Claude)",
+  "type": "module",
+  "scripts": {
+    "dev": "node --no-warnings server/index.js",
+    "build": "vite build",
+    "start": "NODE_ENV=production node --no-warnings server/index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.475.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "xlsx": "^0.18.5",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.6",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tailwindcss": "^4.0.6",
+    "vite": "^6.1.0"
+  }
+}
+
