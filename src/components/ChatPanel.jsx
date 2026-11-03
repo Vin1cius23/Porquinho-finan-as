@@ -18,12 +18,12 @@ import {
 import { formatCurrency, formatDateBR } from '../utils/formatters.js';
 
 const QUICK_EXAMPLES = [
+  { label: '➕ Adicionar Saldo', text: 'Quero adicionar saldo na conta' },
   { label: '🛒 Mercado R$ 45', text: 'Gastei 45 reais no mercado hoje no débito' },
   { label: '💰 Salário R$ 3.200', text: 'Recebi 3.200 de salário' },
   { label: '🚗 Uber R$ 28 PIX', text: 'Paguei 28 reais de Uber hoje no PIX' },
-  { label: '📊 Gasto Alimentação?', text: 'Quanto gastei esse mês com Alimentação?' },
+  { label: '📊 Meu Saldo / Resumo', text: 'Qual é o meu saldo?' },
   { label: '🏆 Top 5 gastos', text: 'Mostre meus 5 maiores gastos' },
-  { label: '🔍 Onde gasto mais?', text: 'Estou gastando demais em quê?' },
   { label: '🗑️ Apagar último', text: 'Apague o último lançamento' },
 ];
 
@@ -50,7 +50,12 @@ function detectLivePreview(text) {
     return { isCommand: true, label: 'Comando / Consulta Inteligente' };
   }
 
-  const isIncome = /\b(recebi|ganhei|sal[aá]rio|freela|rendeu|dividendo|reembolso|entrou)\b/i.test(lower);
+  const isExpenseKeyword = /\b(gastei|paguei|comprei|despesa|boleto|fatura)\b/i.test(lower);
+  const isIncome =
+    !isExpenseKeyword &&
+    /\b(recebi|ganhei|sal[aá]rio|freela|rendeu|dividendo|reembolso|entrou|caiu|fiz\s+um\s+extra|renda\s+extra|bico|depositei|coloquei|colocar|adicionei|adicionar|adiciona|botei|botar|somar|acrescentar|saldo|vendi)\b/i.test(
+      lower
+    );
   const milMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*mil\b/);
   let amount = null;
   if (milMatch) {
@@ -407,10 +412,13 @@ export default function ChatPanel({
                     {rawAction.missing_field === 'amount' && (
                       <div>
                         <span className="block text-[11px] text-slate-400 mb-1.5">
-                          Toque em um valor aproximado ou digite abaixo:
+                          Toque em um valor rápido ou digite abaixo:
                         </span>
                         <div className="flex flex-wrap gap-1.5">
-                          {['25 reais', '50 reais', '100 reais', '150 reais', '300 reais'].map((v) => (
+                          {(rawAction.type === 'income'
+                            ? ['200 reais', '500 reais', '1.000 reais', '2.000 reais', '3.500 reais']
+                            : ['25 reais', '50 reais', '100 reais', '150 reais', '300 reais']
+                          ).map((v) => (
                             <button
                               key={v}
                               type="button"
