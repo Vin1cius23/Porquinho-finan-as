@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finchat-pwa-v7';
+const CACHE_NAME = 'finchat-pwa-v8';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',

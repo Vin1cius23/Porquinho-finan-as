@@ -7,15 +7,18 @@ import {
   Plus,
   Trash2,
   AlertCircle,
+  Edit3,
+  Check,
   X,
 } from 'lucide-react';
-import { formatCurrency, formatDateBR } from '../utils/formatters.js';
+import { formatCurrency, formatDateBR, parseMoneyInputBR } from '../utils/formatters.js';
 
 export default function AccountsManager({
   accounts,
   transactions,
   goals,
   onAddAccount,
+  onUpdateAccount,
   onDeleteAccount,
   onUpdateTransaction,
   onAddGoal,
@@ -29,6 +32,9 @@ export default function AccountsManager({
   const [accLimit, setAccLimit] = useState('');
   const [accClosing, setAccClosing] = useState('');
   const [accDue, setAccDue] = useState('');
+
+  const [editingAccId, setEditingAccId] = useState(null);
+  const [editAccBalance, setEditAccBalance] = useState('');
 
   const [showAddGoal, setShowAddGoal] = useState(false);
   const [goalTitle, setGoalTitle] = useState('');
@@ -49,8 +55,8 @@ export default function AccountsManager({
     await onAddAccount({
       name: accName.trim(),
       type: accType,
-      initial_balance: Number(accBalance) || 0,
-      credit_limit: Number(accLimit) || 0,
+      initial_balance: parseMoneyInputBR(accBalance),
+      credit_limit: parseMoneyInputBR(accLimit),
       closing_day: accClosing ? Number(accClosing) : null,
       due_day: accDue ? Number(accDue) : null,
     });
@@ -60,6 +66,18 @@ export default function AccountsManager({
     setAccClosing('');
     setAccDue('');
     setShowAddAccount(false);
+  }
+
+  async function handleSaveAccountBalance(acc) {
+    const val = parseMoneyInputBR(editAccBalance);
+    if (onUpdateAccount) {
+      if (acc.type === 'credit_card') {
+        await onUpdateAccount(acc.id, { credit_limit: val });
+      } else {
+        await onUpdateAccount(acc.id, { initial_balance: val });
+      }
+    }
+    setEditingAccId(null);
   }
 
   async function handleCreateGoal(e) {
@@ -194,8 +212,9 @@ export default function AccountsManager({
 
               {accType !== 'credit_card' ? (
                 <input
-                  type="number"
-                  placeholder="Saldo Inicial (R$)"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Saldo Inicial (Ex: 2500 ou 2.500,00)"
                   value={accBalance}
                   onChange={(e) => setAccBalance(e.target.value)}
                   className="col-span-2 px-2.5 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900"
@@ -203,7 +222,8 @@ export default function AccountsManager({
               ) : (
                 <>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     placeholder="Limite Cartão (R$)"
                     value={accLimit}
                     onChange={(e) => setAccLimit(e.target.value)}
@@ -244,31 +264,76 @@ export default function AccountsManager({
           {accounts.map((acc) => (
             <div
               key={acc.id}
-              className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 flex items-center justify-between"
+              className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 flex items-center justify-between gap-2"
             >
-              <div>
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   {acc.type === 'credit_card' ? (
-                    <CreditCard className="w-4 h-4 text-purple-500" />
+                    <CreditCard className="w-4 h-4 text-purple-500 shrink-0" />
                   ) : (
-                    <Wallet className="w-4 h-4 text-emerald-500" />
+                    <Wallet className="w-4 h-4 text-emerald-500 shrink-0" />
                   )}
-                  <span className="font-bold text-xs">{acc.name}</span>
+                  <span className="font-bold text-xs truncate">{acc.name}</span>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  {acc.type === 'credit_card'
-                    ? `Limite: ${formatCurrency(acc.credit_limit)} • Fecha dia ${acc.closing_day || '-'} / Vence dia ${acc.due_day || '-'}`
-                    : `Saldo Inicial: ${formatCurrency(acc.initial_balance)}`}
-                </p>
+                {editingAccId === acc.id ? (
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      autoFocus
+                      value={editAccBalance}
+                      onChange={(e) => setEditAccBalance(e.target.value)}
+                      placeholder="Ex: 2500"
+                      className="w-28 px-2 py-1 rounded-lg border border-emerald-500 bg-white dark:bg-slate-900 text-xs font-bold outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleSaveAccountBalance(acc)}
+                      className="px-2 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Check className="w-3 h-3" />
+                      Salvar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingAccId(null)}
+                      className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {acc.type === 'credit_card'
+                      ? `Limite: ${formatCurrency(acc.credit_limit)} • Fecha dia ${acc.closing_day || '-'} / Vence dia ${acc.due_day || '-'}`
+                      : `Saldo Inicial: ${formatCurrency(acc.initial_balance)}`}
+                  </p>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={() => onDeleteAccount(acc.id)}
-                className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
-                title="Remover conta"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingAccId(acc.id);
+                    setEditAccBalance(
+                      String(acc.type === 'credit_card' ? acc.credit_limit || 0 : acc.initial_balance || 0)
+                    );
+                  }}
+                  className="px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold flex items-center gap-1 hover:bg-emerald-100 cursor-pointer"
+                  title="Editar saldo inicial"
+                >
+                  <Edit3 className="w-3 h-3" />
+                  <span>Editar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDeleteAccount(acc.id)}
+                  className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                  title="Remover conta"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
