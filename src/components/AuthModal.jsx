@@ -128,9 +128,11 @@ export default function AuthModal({ user, token, onAuthSuccess, onOnboardingComp
         {/* Cabeçalho com progresso de Onboarding em 3 passos */}
         <div className="bg-emerald-600 p-5 sm:p-6 text-white">
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-2.5 bg-white/20 rounded-2xl">
-              <MessageSquare className="w-6 h-6" />
-            </div>
+            <img
+              src="/icons/icon-192.png"
+              alt="FinChat IA"
+              className="w-12 h-12 rounded-2xl bg-white p-0.5 shadow-md object-contain shrink-0"
+            />
             <div>
               <h1 className="text-xl font-bold tracking-tight">Porquinho Finanças</h1>
               <p className="text-xs text-emerald-100">

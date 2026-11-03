@@ -238,9 +238,11 @@ export default function ChatPanel({
       {/* Cabeçalho estilo WhatsApp com botão de construtor rápido */}
       <div className="bg-emerald-700 dark:bg-emerald-900 text-white px-3 py-2.5 flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-9 h-9 rounded-full bg-emerald-500/30 border border-emerald-300/30 flex items-center justify-center shrink-0">
-            <Bot className="w-4 h-4 text-white" />
-          </div>
+          <img
+            src="/icons/icon-192.png"
+            alt="FinChat IA"
+            className="w-9 h-9 rounded-full bg-white p-0.5 border border-emerald-300/40 object-contain shrink-0"
+          />
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <h2 className="font-semibold text-xs sm:text-sm truncate">Assistente FinChat IA</h2>
