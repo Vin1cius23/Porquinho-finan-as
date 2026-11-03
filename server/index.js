@@ -169,7 +169,7 @@ function buildFinancialContext(userId, targetMonth = null) {
 }
 
 function buildSnapshotResponse(user, month = null, extra = {}) {
-  triggerBackgroundSupabaseSync();
+  triggerBackgroundSupabaseSync(user.id);
   const ctx = buildFinancialContext(user.id, month);
   return {
     user,
