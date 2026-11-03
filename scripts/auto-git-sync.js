@@ -61,3 +61,4 @@ export function startGitAutoWatcher() {
 if (process.argv[1] && process.argv[1].endsWith('auto-git-sync.js')) {
   triggerGitAutoSync('sincronização manual/imediata');
 }
+
