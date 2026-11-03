@@ -129,8 +129,8 @@ export function seedUserDefaults(userId, selectedCategories = null, initialBalan
       'INSERT INTO accounts (user_id, name, type, initial_balance, credit_limit, closing_day, due_day) VALUES (?, ?, ?, ?, ?, ?, ?)'
     );
     insertAcc.run(userId, mainAccountName, 'checking', Number(initialBalance) || 0, 0, null, null);
-    insertAcc.run(userId, 'Cartão Nubank', 'credit_card', 0, 4500, 3, 10);
-    insertAcc.run(userId, 'Carteira Física', 'wallet', 120, 0, null, null);
+    insertAcc.run(userId, 'Cartão Principal', 'credit_card', 0, 4500, 3, 10);
+    insertAcc.run(userId, 'Carteira Física', 'wallet', 0, 0, null, null);
   }
 
   const existingMsgs = db.prepare('SELECT COUNT(*) as count FROM chat_messages WHERE user_id = ?').get(userId);
