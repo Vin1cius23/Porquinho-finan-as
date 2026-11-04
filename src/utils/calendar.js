@@ -202,3 +202,4 @@ export async function requestAndSendBillNotification(bill) {
     return false;
   }
 }
+
