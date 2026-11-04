@@ -13,12 +13,20 @@ import {
   Zap,
   Tag,
   Calendar,
+  CalendarPlus,
+  ExternalLink,
   CreditCard,
 } from 'lucide-react';
 import { formatCurrency, formatDateBR } from '../utils/formatters.js';
+import {
+  addBillToDeviceCalendar,
+  getGoogleCalendarUrl,
+  requestAndSendBillNotification,
+} from '../utils/calendar.js';
 
 const QUICK_EXAMPLES = [
   { label: '➕ Adicionar Saldo', text: 'Quero adicionar saldo na conta' },
+  { label: '📅 Conta Vencendo', text: 'Conta de luz de 180 vence dia 10' },
   { label: '🛒 Mercado R$ 45', text: 'Gastei 45 reais no mercado hoje no débito' },
   { label: '💰 Salário R$ 3.200', text: 'Recebi 3.200 de salário' },
   { label: '🚗 Uber R$ 28 PIX', text: 'Paguei 28 reais de Uber hoje no PIX' },
