@@ -162,8 +162,18 @@ function parseRelativeDatePT(text, todayISO) {
   const dayMatch = lower.match(/\bdia\s+(\d{1,2})\b/);
   if (dayMatch) {
     const dayNum = Math.min(31, Math.max(1, parseInt(dayMatch[1], 10)));
-    const [y, m] = todayISO.split('-');
-    return `${y}-${m}-${String(dayNum).padStart(2, '0')}`;
+    const [y, m, dToday] = todayISO.split('-').map(Number);
+    const isFutureIntent = /\b(venc(e|imento|er|endo)|agend(ar|ado)|lembr(ar|ete)|pagar|boleto|fatura|pr[oó]xim[oa])\b/i.test(lower);
+    let targetYear = y;
+    let targetMonth = m;
+    if (isFutureIntent && dayNum < dToday) {
+      targetMonth += 1;
+      if (targetMonth > 12) {
+        targetMonth = 1;
+        targetYear += 1;
+      }
+    }
+    return `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
   }
 
   // "dd/mm/aaaa" ou "dd/mm"
