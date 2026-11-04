@@ -25,6 +25,8 @@ export const AIResponseSchema = z.object({
       installments: z.number().int().min(1).max(72).optional().default(1),
       installment_info: z.string().optional().default(''),
       notes: z.string().optional().default(''),
+      status: z.enum(['paid', 'pending']).optional().default('paid'),
+      due_date: z.string().nullable().optional(),
     })
     .nullable()
     .optional(),
