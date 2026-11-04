@@ -327,6 +327,9 @@ app.post('/api/chat/message', authMiddleware, async (req, res) => {
       const nextInit = isAdditive ? prevInit + parsedBal : parsedBal;
 
       if (mainAcc) {
+        if (!isAdditive) {
+          db.prepare("UPDATE accounts SET initial_balance = 0 WHERE user_id = ? AND type != 'credit_card'").run(userId);
+        }
         db.prepare('UPDATE accounts SET initial_balance = ? WHERE id = ?').run(nextInit, mainAcc.id);
       } else {
         db.prepare(
@@ -685,6 +688,7 @@ app.put('/api/accounts/balance', authMiddleware, async (req, res) => {
       .prepare("SELECT id FROM accounts WHERE user_id = ? AND type != 'credit_card' ORDER BY id ASC LIMIT 1")
       .get(userId);
     if (mainAcc) {
+      db.prepare("UPDATE accounts SET initial_balance = 0 WHERE user_id = ? AND type != 'credit_card'").run(userId);
       db.prepare('UPDATE accounts SET initial_balance = ? WHERE id = ?').run(newBalance, mainAcc.id);
     } else {
       db.prepare(
@@ -759,6 +763,7 @@ app.delete('/api/user/data', authMiddleware, async (req, res) => {
   db.prepare('DELETE FROM transactions WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM goals WHERE user_id = ?').run(userId);
+  db.prepare("UPDATE accounts SET initial_balance = 0 WHERE user_id = ? AND type != 'credit_card'").run(userId);
   db.prepare(
     'INSERT INTO chat_messages (user_id, role, content, action_status) VALUES (?, ?, ?, ?)'
   ).run(userId, 'assistant', WELCOME_MESSAGE, 'none');
