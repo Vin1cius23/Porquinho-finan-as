@@ -28,8 +28,13 @@ import AccountsManager from './components/AccountsManager.jsx';
 import { formatCurrency, getCurrentMonthISO, getTodayISO, parseMoneyInputBR } from './utils/formatters.js';
 
 export default function App() {
-  const [token, setToken] = useState(() => localStorage.getItem('finchat_token') || '');
-  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(() => localStorage.getItem('finchat_token') || 'default');
+  const [user, setUser] = useState({
+    id: 1,
+    name: 'Porquinho Finanças',
+    email: 'demo@finchat.com.br',
+    onboarded: 1,
+  });
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('finchat_theme') === 'dark');
 
   // Inicia por padrão no Modo App Mobile (com moldura de celular no desktop e tela cheia nativa no smartphone)
@@ -141,19 +146,14 @@ export default function App() {
 
   const fetchBootstrap = useCallback(
     async (customMonth = selectedMonth) => {
-      if (!token) return;
       try {
         const res = await fetch(`/api/bootstrap?month=${encodeURIComponent(customMonth)}`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${token || 'default'}` },
         });
-        if (res.status === 401) {
-          localStorage.removeItem('finchat_token');
-          setToken('');
-          setUser(null);
-          return;
+        if (res.ok) {
+          const data = await res.json();
+          applySnapshot(data);
         }
-        const data = await res.json();
-        applySnapshot(data);
       } catch (err) {
         console.error('Erro ao carregar dados:', err);
       }
@@ -460,24 +460,6 @@ export default function App() {
     showToast(`Filtrando planilha por: ${categoryName}`);
   }
 
-  if (!token || !user || user.onboarded === 0) {
-    return (
-      <AuthModal
-        user={user}
-        token={token}
-        onAuthSuccess={handleAuthSuccess}
-        onOnboardingComplete={(updatedUser, newToken) => {
-          if (newToken) {
-            localStorage.setItem('finchat_token', newToken);
-            setToken(newToken);
-          }
-          setUser(updatedUser);
-          fetchBootstrap();
-        }}
-      />
-    );
-  }
-
   // ============================================================================
   // VISÃO 1: EXPERIÊNCIA DE APP MOBILE NATIVO (Padrão)
   // ============================================================================
@@ -520,16 +502,8 @@ export default function App() {
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
                   <p className="text-[11px] text-emerald-100/90 truncate">
-                    Olá, <strong>{user.name.split(' ')[0]}</strong> 👋
+                    <strong>Porquinho Finanças</strong> 👋
                   </p>
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="px-1.5 py-0.5 rounded bg-white/15 hover:bg-white/25 text-[9px] font-semibold text-white transition cursor-pointer shrink-0"
-                    title="Sair ou trocar para outra conta"
-                  >
-                    Trocar conta
-                  </button>
                 </div>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <button
@@ -584,17 +558,9 @@ export default function App() {
                   type="button"
                   onClick={handleWipeUserData}
                   className="p-1.5 rounded-full bg-white/10 hover:bg-rose-500/40 transition cursor-pointer"
-                  title="Apagar meus dados"
+                  title="Zerar lançamentos"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer"
-                  title="Sair"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
