@@ -772,11 +772,14 @@ export default function App() {
               <AccountsManager
                 accounts={accounts}
                 transactions={transactions}
+                categories={categories}
                 goals={goals}
                 onAddAccount={handleAddAccount}
                 onUpdateAccount={handleUpdateAccount}
                 onDeleteAccount={handleDeleteAccount}
+                onCreateTransaction={handleCreateTransaction}
                 onUpdateTransaction={handleUpdateTransaction}
+                onDeleteTransaction={handleDeleteTransaction}
                 onAddGoal={handleAddGoal}
                 onUpdateGoal={handleUpdateGoal}
                 onDeleteGoal={handleDeleteGoal}
@@ -998,11 +1001,14 @@ export default function App() {
           <AccountsManager
             accounts={accounts}
             transactions={transactions}
+            categories={categories}
             goals={goals}
             onAddAccount={handleAddAccount}
             onUpdateAccount={handleUpdateAccount}
             onDeleteAccount={handleDeleteAccount}
+            onCreateTransaction={handleCreateTransaction}
             onUpdateTransaction={handleUpdateTransaction}
+            onDeleteTransaction={handleDeleteTransaction}
             onAddGoal={handleAddGoal}
             onUpdateGoal={handleUpdateGoal}
             onDeleteGoal={handleDeleteGoal}
