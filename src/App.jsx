@@ -26,6 +26,7 @@ import SpreadsheetView from './components/SpreadsheetView.jsx';
 import MonthlySummary from './components/MonthlySummary.jsx';
 import AccountsManager from './components/AccountsManager.jsx';
 import { formatCurrency, getCurrentMonthISO, getTodayISO, parseMoneyInputBR } from './utils/formatters.js';
+import { addBillToDeviceCalendar, requestAndSendBillNotification } from './utils/calendar.js';
 
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem('finchat_token') || 'default');
