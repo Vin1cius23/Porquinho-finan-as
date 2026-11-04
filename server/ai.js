@@ -426,6 +426,14 @@ function localSmartInterpreter({ message, todayISO, categories, accounts, financ
       : (isIncome ? 'Receita recebida' : 'Despesa geral');
   }
 
+  const isPendingBill =
+    !isIncome &&
+    (/\b(venc(e|imento|er|endo)|conta\s+a\s+pagar|pagar\s+dia|lembr(ar|ete)|agend(ar|ado)|pendente|vence\s+em|para\s+o?\s*dia)\b/i.test(
+      lower
+    ) ||
+      activeDraft?.status === 'pending' ||
+      (date > todayISO && !/\b(gastei|paguei|comprei)\b/i.test(lower)));
+
   const draftTx = {
     type: activeDraft?.type || (isIncome ? 'income' : 'expense'),
     amount,
@@ -438,13 +446,15 @@ function localSmartInterpreter({ message, todayISO, categories, accounts, financ
     installments,
     installment_info: installmentInfo,
     notes: installments > 1 ? `Compra parcelada em ${installments}x` : '',
+    status: isPendingBill ? 'pending' : 'paid',
+    due_date: isPendingBill ? date : null,
   };
 
   // Se não parece nem comando nem lançamento
-  if (!amount && !category && !isIncome && !/\b(gastei|paguei|comprei|recebi|ganhei|conta|almoço|mercado|uber|saldo|adicion|coloc|bot)\b/i.test(lower)) {
+  if (!amount && !category && !isIncome && !/\b(gastei|paguei|comprei|recebi|ganhei|conta|almoço|mercado|uber|saldo|adicion|coloc|bot|venc|boleto|agend|lembr)\b/i.test(lower)) {
     return {
       intent: 'general_chat',
-      reply: 'Posso adicionar saldo, registrar seus gastos e receitas ou responder dúvidas sobre seu mês! Experimente dizer *"Adicionei 2.000 de saldo"*, *"Gastei 45 reais no mercado hoje"* ou *"Qual é o meu saldo?"*.',
+      reply: 'Posso adicionar saldo, agendar contas próximas do vencimento (com alerta no seu calendário!), registrar gastos ou responder dúvidas! Experimente dizer *"Conta de luz de 180 vence dia 10"*, *"Adicionei 2.000 de saldo"* ou *"Gastei 45 reais no mercado"*.',
       missing_field: 'none',
       transaction: null,
     };
@@ -456,7 +466,7 @@ function localSmartInterpreter({ message, todayISO, categories, accounts, financ
       intent: 'ask_missing_info',
       reply: isIncome
         ? 'Qual valor você quer adicionar ao seu saldo / registrar como entrada? 💰'
-        : `Qual foi o valor desse gasto${category ? ` em **${category}**` : ''}?`,
+        : `Qual foi o valor dessa conta/gasto${category ? ` em **${category}**` : ''}?`,
       missing_field: 'amount',
       transaction: draftTx,
     };
@@ -465,13 +475,18 @@ function localSmartInterpreter({ message, todayISO, categories, accounts, financ
   if (!category) {
     return {
       intent: 'ask_missing_info',
-      reply: `Em qual categoria você quer classificar esse gasto de **${formatBRL(amount)}**? (ex.: Alimentação, Moradia, Transporte, Lazer, Saúde)`,
+      reply: `Em qual categoria você quer classificar esse valor de **${formatBRL(amount)}**? (ex.: Moradia, Alimentação, Transporte, Lazer, Saúde)`,
       missing_field: 'category',
       transaction: draftTx,
     };
   }
 
-  const labelType = draftTx.type === 'income' ? 'Entrada / Adição de Saldo' : 'Despesa';
+  const labelType =
+    draftTx.type === 'income'
+      ? 'Entrada / Adição de Saldo'
+      : draftTx.status === 'pending'
+      ? '📅 Conta a Pagar (Vencimento Agendado)'
+      : 'Despesa';
   const parcelText = draftTx.installments > 1 ? ` (${draftTx.installments}x de ${formatBRL(draftTx.amount / draftTx.installments)})` : '';
   const recText = draftTx.is_recurring ? ', recorrente' : '';
   const currentBal = Number(
@@ -482,13 +497,16 @@ function localSmartInterpreter({ message, todayISO, categories, accounts, financ
   );
   const projectedBal =
     draftTx.type === 'income' ? currentBal + Number(draftTx.amount) : currentBal - Number(draftTx.amount);
-  const balancePreviewLine = `\n💰 *Saldo após confirmar: ${formatBRL(currentBal)} ${
-    draftTx.type === 'income' ? '+' : '-'
-  } ${formatBRL(draftTx.amount)} = **${formatBRL(projectedBal)}***`;
+  const balancePreviewLine =
+    draftTx.status === 'pending'
+      ? `\n🔔 *Será listada em **Contas Próximas do Vencimento** com opção de **Criar Alerta no Calendário**!*`
+      : `\n💰 *Saldo após confirmar: ${formatBRL(currentBal)} ${
+          draftTx.type === 'income' ? '+' : '-'
+        } ${formatBRL(draftTx.amount)} = **${formatBRL(projectedBal)}***`;
 
   return {
     intent: 'confirm_transaction',
-    reply: `${labelType} de **${formatBRL(draftTx.amount)}**${parcelText} em **${draftTx.category}** (${draftTx.description}), dia **${formatBRDate(draftTx.date)}**, no **${draftTx.payment_method}** (${draftTx.account_name}${recText}).${balancePreviewLine}\nConfirmar?`,
+    reply: `${labelType} de **${formatBRL(draftTx.amount)}**${parcelText} em **${draftTx.category}** (${draftTx.description}), vencimento/data **${formatBRDate(draftTx.date)}**, no **${draftTx.payment_method}** (${draftTx.account_name}${recText}).${balancePreviewLine}\nConfirmar?`,
     missing_field: 'none',
     transaction: draftTx,
   };
