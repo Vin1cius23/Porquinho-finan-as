@@ -555,9 +555,39 @@ export default function ChatPanel({
                         )}
 
                         {msg.action_status === 'confirmed' && (
-                          <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span>Confirmado e salvo na planilha</span>
+                          <div className="mt-2 space-y-2">
+                            <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>
+                                {pending.status === 'pending'
+                                  ? 'Conta agendada em Contas Próximas do Vencimento!'
+                                  : 'Confirmado e salvo na planilha'}
+                              </span>
+                            </div>
+                            {pending.type === 'expense' && (
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    addBillToDeviceCalendar(pending);
+                                    requestAndSendBillNotification(pending);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-white text-[11px] font-semibold cursor-pointer transition shadow-2xs"
+                                >
+                                  <CalendarPlus className="w-3.5 h-3.5" />
+                                  <span>Criar Alerta no Calendário</span>
+                                </button>
+                                <a
+                                  href={getGoogleCalendarUrl(pending)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-[11px] font-semibold transition"
+                                >
+                                  <ExternalLink className="w-3 h-3 text-emerald-600" />
+                                  <span>Google Agenda</span>
+                                </a>
+                              </div>
+                            )}
                           </div>
                         )}
 
