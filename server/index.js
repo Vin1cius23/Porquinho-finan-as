@@ -74,10 +74,10 @@ function buildFinancialContext(userId, targetMonth = null) {
   const prevMonthTx = allTransactions.filter((t) => t.date.startsWith(prevMonth));
 
   const totalIncome = monthTx
-    .filter((t) => t.type === 'income')
+    .filter((t) => t.type === 'income' && t.status !== 'pending')
     .reduce((acc, t) => acc + Number(t.amount), 0);
   const totalExpense = monthTx
-    .filter((t) => t.type === 'expense')
+    .filter((t) => t.type === 'expense' && t.status !== 'pending')
     .reduce((acc, t) => acc + Number(t.amount), 0);
 
   const prevIncome = prevMonthTx
@@ -447,10 +447,11 @@ app.post('/api/chat/action', authMiddleware, async (req, res) => {
     }
 
     const ctxBeforeAction = buildFinancialContext(userId, month);
+    const txStatus = txData.status === 'pending' ? 'pending' : 'paid';
     const insertStmt = db.prepare(`
       INSERT INTO transactions (
-        user_id, date, description, category, type, amount, payment_method, account_name, is_recurring, installment_info, notes, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid')
+        user_id, date, description, category, type, amount, payment_method, account_name, is_recurring, installment_info, notes, status, due_date
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const baseDate = new Date(`${txData.date || getTodaySaoPaulo()}T12:00:00-03:00`);
@@ -464,6 +465,7 @@ app.post('/api/chat/action', authMiddleware, async (req, res) => {
       d.setMonth(d.getMonth() + i);
       const isoDate = d.toISOString().slice(0, 10);
       const instInfo = totalInstallments > 1 ? `${i + 1}/${totalInstallments}` : (txData.installment_info || '');
+      const dueDateVal = txStatus === 'pending' ? (txData.due_date || isoDate) : (txData.due_date || null);
       const r = insertStmt.run(
         userId,
         isoDate,
@@ -475,7 +477,9 @@ app.post('/api/chat/action', authMiddleware, async (req, res) => {
         txData.account_name || 'Conta Principal',
         txData.is_recurring ? 1 : 0,
         instInfo,
-        txData.notes || ''
+        txData.notes || '',
+        txStatus,
+        dueDateVal
       );
       createdIds.push(Number(r.lastInsertRowid));
     }
@@ -487,7 +491,7 @@ app.post('/api/chat/action', authMiddleware, async (req, res) => {
     const ctxAfter = buildFinancialContext(userId, month);
     const catInfo = ctxAfter.byCategory.find((c) => c.category === txData.category);
     let budgetTip = '';
-    if (txData.type === 'expense' && catInfo && catInfo.budget > 0) {
+    if (txData.type === 'expense' && txStatus === 'paid' && catInfo && catInfo.budget > 0) {
       const pct = Math.round((catInfo.total / catInfo.budget) * 100);
       if (pct >= 100) {
         budgetTip = `\n\n🚨 *Atenção: Com este gasto, você atingiu **${pct}%** do orçamento mensal de **${catInfo.category}** (${formatBRL(catInfo.total)} de ${formatBRL(catInfo.budget)}).*`;
@@ -497,11 +501,17 @@ app.post('/api/chat/action', authMiddleware, async (req, res) => {
     }
 
     const opSign = txData.type === 'income' ? '+' : '-';
-    const balanceMathLine = `\n💰 **Saldo Atualizado:** ${formatBRL(ctxBeforeAction.currentTotalBalance)} ${opSign} ${formatBRL(baseAmount)} = **${formatBRL(ctxAfter.currentTotalBalance)} disponível**`;
+    const balanceMathLine =
+      txStatus === 'pending'
+        ? `\n🔔 **Lembrete ativo em Carteira > Contas Próximas do Vencimento!** Use o botão **📅 Criar Alerta no Calendário** para receber o aviso no celular.`
+        : `\n💰 **Saldo Atualizado:** ${formatBRL(ctxBeforeAction.currentTotalBalance)} ${opSign} ${formatBRL(baseAmount)} = **${formatBRL(ctxAfter.currentTotalBalance)} disponível**`;
 
-    const confirmReply = totalInstallments > 1
-      ? `✅ Salvo na planilha! Registrei **${totalInstallments} parcelas de ${formatBRL(perInstallmentAmount)}** em **${txData.category}**.${balanceMathLine}${budgetTip}`
-      : `✅ ${txData.type === 'income' ? 'Entrada' : 'Despesa'} de **${formatBRL(baseAmount)}** em **${txData.category}** salva na planilha!${balanceMathLine}${budgetTip}`;
+    const confirmReply =
+      txStatus === 'pending'
+        ? `✅ Conta a pagar **${txData.description}** (**${formatBRL(baseAmount)}**) agendada para **${formatBRDate(txData.date)}**!${balanceMathLine}`
+        : totalInstallments > 1
+        ? `✅ Salvo na planilha! Registrei **${totalInstallments} parcelas de ${formatBRL(perInstallmentAmount)}** em **${txData.category}**.${balanceMathLine}${budgetTip}`
+        : `✅ ${txData.type === 'income' ? 'Entrada' : 'Despesa'} de **${formatBRL(baseAmount)}** em **${txData.category}** salva na planilha!${balanceMathLine}${budgetTip}`;
 
     db.prepare(
       'INSERT INTO chat_messages (user_id, role, content, action_status) VALUES (?, ?, ?, ?)'
