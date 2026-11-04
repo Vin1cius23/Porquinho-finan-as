@@ -241,7 +241,15 @@ export default function App() {
         const data = await res.json();
         applySnapshot(data);
         if (action === 'confirm') {
-          showToast('✅ Salvo na Planilha! Toque na aba Planilha para ver.');
+          const targetMsg = messages.find((m) => m.id === messageId);
+          const confirmedTx = updatedTransaction || targetMsg?.pending_action;
+          if (confirmedTx && confirmedTx.status === 'pending') {
+            showToast('🔔 Conta agendada! Abrindo alerta para o Calendário...');
+            addBillToDeviceCalendar(confirmedTx);
+            requestAndSendBillNotification(confirmedTx);
+          } else {
+            showToast('✅ Salvo na Planilha! Toque na aba Planilha para ver.');
+          }
         }
       }
     } finally {
